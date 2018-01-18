@@ -237,8 +237,9 @@ externalLHEProducer = cms.EDProducer("ExternalLHEProducer",
 """.format(cards)
 
     if fragment != "" and tag != "":
-        gen_fragment_url = "https://raw.githubusercontent.com/cms-sw/genproductions/{0}/{1}".format(
-            tag, fragment.split("Configuration/GenProduction/")[1])
+        #gen_fragment_url = "https://raw.githubusercontent.com/cms-sw/genproductions/{0}/{1}".format(
+        #    tag, fragment.split("Configuration/GenProduction/")[1])
+        gen_fragment_url = fragment
         gen_fragment = urllib2.urlopen(gen_fragment_url).read()
         code += """
 {0}
