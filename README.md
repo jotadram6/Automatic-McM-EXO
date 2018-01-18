@@ -13,8 +13,9 @@ Script to automatically do local validation of requests: testRequests.py
 Instructions for wmLHE requests on lxplus6:
 
 Format to be used in the .csv file with example for each field:
+
 Dataset name,Total events,Generator fragment name,Generator,Gridpack location,Gridpack cards URL,match efficiency,Xsec [pb],Tag,MCDBID
-Debugging_wmLHE_scripts,300000,https://raw.githubusercontent.com/jotadram6/genproductions/DarkHiggs/python/ThirteenTeV/DarkHiggs/ZprimeToDmDmDarkhiggs_DarkhiggsToBB_TuneCUETP8M1_13TeV_MLM_4f_max1j_DM_LHE_pythia8_cff.py,madgraph pythia8,/cvmfs/cms.cern.ch/phys_generator/gridpacks/slc6_amd64_gcc481/13TeV/madgraph/V5_2.4.2/DrakHiggs_MZP_MCHI/v2_patched/MZP-500_MCHI-100_slc6_amd64_gcc481_CMSSW_7_1_30_tarball.tar.xz,https://github.com/cms-sw/genproductions/tree/27fcaa7ab3f1a50fa98784318da96cc9c1564619/bin/MadGraph5_aMCatNLO/cards/production/2017/13TeV/Darkhiggs_4f_LO/,61.9,3.36,05f6761656afb772d1fd7e9dde5d3e8a758724e2,0
+Debugging_wmLHE_scripts, 300000, https://raw.githubusercontent.com/jotadram6/genproductions/DarkHiggs/python/ThirteenTeV/DarkHiggs/ZprimeToDmDmDarkhiggs_DarkhiggsToBB_TuneCUETP8M1_13TeV_MLM_4f_max1j_DM_LHE_pythia8_cff.py, madgraph pythia8, /cvmfs/cms.cern.ch/phys_generator/gridpacks/slc6_amd64_gcc481/13TeV/madgraph/V5_2.4.2/DrakHiggs_MZP_MCHI/v2_patched/MZP-500_MCHI-100_slc6_amd64_gcc481_CMSSW_7_1_30_tarball.tar.xz, https://github.com/cms-sw/genproductions/tree/27fcaa7ab3f1a50fa98784318da96cc9c1564619/bin/MadGraph5_aMCatNLO/cards/production/2017/13TeV/Darkhiggs_4f_LO/, 61.9, 3.36, 05f6761656afb772d1fd7e9dde5d3e8a758724e2, 0
 
 1. source Cookies.sh
 1. python manageRequests.py -c RunIIFall17wmLHEGS -t EXO-Name-Number file.csv
