@@ -342,25 +342,31 @@ def fillFields(csvfile, fields):
 def rewriteCSVFile(csvfile, requests):
     csvWriter = csv.writer(csvfile)
     csvWriter.writerow(['PrepId', 'JobId', 'Time per event [s]',
-                        'Size per event [kB]'])
+                        'Size per event [kB]', 'match efficiency'])
 
     for req in requests:
         timePerEvent = ""
         if req.useTime(): timePerEvent = req.getTime()
         sizePerEvent = ""
         if req.useSize(): sizePerEvent = req.getSize()
+        matchEff = ""
+        if req.useMatchEff(): matchEff = req.getMatchEff()
 
         csvWriter.writerow([req.getPrepId(), req.getJobID(), timePerEvent,
-                            sizePerEvent])
+                            sizePerEvent, matchEff])
     return
 
 def getTimeSizeFromFile(stdoutFile, iswmLHE):
     totalSize = 0
     timePerEvent = 0
     nEvents = 0
+    XsBeforeMatch = 0
+    XsAfterMatch = 0
+    matchEff = 0
     fileContents = open(stdoutFile, 'r')
     for line in fileContents:
-        match = re.match('<TotalEvents>(\d*)</TotalEvents>', line)
+        #match = re.match('<TotalEvents>(\d*)</TotalEvents>', line)
+        match = re.match('(\d*) events were ran', line)
         if match is not None:
             nEvents = float(match.group(1))
             continue
@@ -369,7 +375,12 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE):
         if match is not None:
             totalSize = float(match.group(1))
             continue
-        match = re.match('    <Metric Name="AvgEventCPU" Value="(\d*\.\d*)"/>',
+        if 'Before matching' in line: XsBeforeMatch=float(line.split('=')[-1].split('+-')[0])
+        if 'After matching' in line: XsAfterMatch=float(line.split('=')[-1].split('+-')[0])
+        if XsAfterMatch!=0 and XsBeforeMatch!=0: matchEff=XsAfterMatch/XsBeforeMatch
+        #match = re.match('    <Metric Name="AvgEventCPU" Value="(\d*\.\d*)"/>',
+        #                 line)
+        match = re.match('    <Metric Name="AvgEventTime" Value="(\d*\.\d*)"/>',
                          line)
         if match is not None:
             timePerEvent = float(match.group(1))
@@ -380,7 +391,8 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE):
         sizePerEvent = totalSize*1024.0/nEvents
     else:
         sizePerEvent = -1
-    return timePerEvent, sizePerEvent
+    print "Found time and size:", timePerEvent, sizePerEvent, matchEff
+    return timePerEvent, sizePerEvent, matchEff
 
 def getTimeSize(requests):
     number_complete = 0
@@ -393,10 +405,11 @@ def getTimeSize(requests):
                 searched = re.search('wmLHE', req.getPrepId())
                 if searched is not None:
                     iswmLHE = True
-                timePerEvent, sizePerEvent = getTimeSizeFromFile(stdoutFile,
+                timePerEvent, sizePerEvent, matchEff = getTimeSizeFromFile(stdoutFile,
                                                                  iswmLHE)
                 req.setTime(timePerEvent)
                 req.setSize(sizePerEvent)
+                req.setMatchEff(matchEff)
         else:
             number_complete += 1
 
