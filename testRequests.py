@@ -375,15 +375,34 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE):
         if match is not None:
             totalSize = float(match.group(1))
             continue
-        if 'Before matching' in line: XsBeforeMatch=float(line.split('=')[-1].split('+-')[0])
-        if 'After matching' in line: XsAfterMatch=float(line.split('=')[-1].split('+-')[0])
+        if 'Before matching' in line: 
+            XsBeforeMatch=float(line.split('=')[-1].split('+-')[0])
+            print "Cross section Before Matching:", XsBeforeMatch
+        if 'After matching' in line: 
+            XsAfterMatch=float(line.split('=')[-1].split('+-')[0])
+            print "Cross section After Matching: ", XsAfterMatch
         if XsAfterMatch!=0 and XsBeforeMatch!=0: matchEff=XsAfterMatch/XsBeforeMatch
-        #match = re.match('    <Metric Name="AvgEventCPU" Value="(\d*\.\d*)"/>',
-        #                 line)
+        timePerEvent1=0; timePerEvent2=0; timePerEvent3=0; timePerEvent4=0;
+        match = re.match('    <Metric Name="AvgEventCPU" Value="(\d*\.\d*)"/>',
+                         line)
+        if match is not None:
+            timePerEvent1 = float(match.group(1))
+            continue
+        match = re.match('    <Metric Name="TotalJobCPU" Value="(\d*\.\d*)"/>',
+                         line)
+        if match is not None:
+            timePerEvent2 = float(match.group(1))
+            continue
         match = re.match('    <Metric Name="AvgEventTime" Value="(\d*\.\d*)"/>',
                          line)
         if match is not None:
-            timePerEvent = float(match.group(1))
+            timePerEvent3 = float(match.group(1))
+            continue
+        match = re.match('    <Metric Name="TotalJobTime" Value="(\d*\.\d*)"/>',
+                         line)
+        if match is not None:
+            timePerEvent4 = float(match.group(1))
+            timePerEvent=max(timePerEvent1,timePerEvent2,timePerEvent3,timePerEvent4)/nEvents
             if iswmLHE: break
             else: continue
 

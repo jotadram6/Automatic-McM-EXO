@@ -486,9 +486,11 @@ def modifyRequests(requests, num_requests, doDryRun, useDev, isLHErequest):
             if reqFields.useTag():
                 mod_req['fragment_tag'] = reqFields.getTag()
         if reqFields.useTime():
-            mod_req['time_event'] = reqFields.getTime()
+            mod_req['time_event'] = [reqFields.getTime()]
+            #print "Debugging update request: Time=", reqFields.getTime(), type(reqFields.getTime()), mod_req['time_event'], type(mod_req['time_event'])
         if reqFields.useSize():
-            mod_req['size_event'] = reqFields.getSize()
+            #mod_req['size_event'] = [reqFields.getSize()]
+            print "Debugging update request: Size=", reqFields.getSize()
         if reqFields.useGen():
             mod_req['generators'] = reqFields.getGen()
         if (reqFields.useCS() or reqFields.useFiltEff()
@@ -531,6 +533,7 @@ def modifyRequests(requests, num_requests, doDryRun, useDev, isLHErequest):
 
         if not doDryRun:
             answer = mcm.updateA('requests', mod_req) # Update request
+            #print "Debugging update request: McM_Answer=", answer
             if answer['results']:
                 if not isLHErequest:
                     print "\033[0;32m{0} modified\033[0;m".format(
