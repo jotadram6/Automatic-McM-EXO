@@ -3,6 +3,7 @@
 # requestClass.py
 #
 #  author: David G. Sheffield (Rutgers)
+#  maintainer: Jose Ruiz (Vanderbilt)
 #
 ################################
 

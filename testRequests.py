@@ -9,6 +9,7 @@
 #  that can be used by manageRequests.py
 #
 #  author: David G. Sheffield (Rutgers)
+#  maintainer: Jose Ruiz (Vanderbilt)
 #
 ################################
 
@@ -403,8 +404,11 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE):
         if match is not None:
             timePerEvent4 = float(match.group(1))
             timePerEvent=max(timePerEvent1,timePerEvent2,timePerEvent3,timePerEvent4)/nEvents
-            if iswmLHE: break
-            else: continue
+            if not iswmLHE:
+                matchEff=1.0
+                continue
+            else:
+                break
 
     if nEvents != 0:
         sizePerEvent = totalSize*1024.0/nEvents

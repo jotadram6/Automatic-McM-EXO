@@ -7,6 +7,7 @@
 #  Script to create tickets for MCCM.
 #
 #  author: David G. Sheffield (Rutgers)
+#  maintainer: Jose Ruiz (Vanderbilt)
 #
 ################################
 

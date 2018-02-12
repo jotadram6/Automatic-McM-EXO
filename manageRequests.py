@@ -7,6 +7,7 @@
 #  Script to create, modify, and clone McM requests.
 #
 #  author: David G. Sheffield (Rutgers)
+#  maintainer: Jose Ruiz (Vanderbilt)
 #
 ################################
 
@@ -213,7 +214,8 @@ def formatFragment(file_, campaign_):
                        'RunIIWinter15wmLHE', 'RunIIWinter15pLHE',
                        'RunIISummer15GS', 'RunIISummer15wmLHEGS', 
                        'RunIIFall17GS', 'RunIIFall17pLHE', 'RunIIFall17wmLHEGS']:
-        return "Configuration/GenProduction/python/ThirteenTeV/Hadronizer/"+file_
+        #return "Configuration/GenProduction/python/ThirteenTeV/Hadronizer/"+file_
+        return "Configuration/GenProduction/python/ThirteenTeV/"+file_
     else:
         print "Error: Cannot determine energy of campaign {0}.".format(campaign_)
         sys.exit(5)
@@ -489,8 +491,8 @@ def modifyRequests(requests, num_requests, doDryRun, useDev, isLHErequest):
             mod_req['time_event'] = [reqFields.getTime()]
             #print "Debugging update request: Time=", reqFields.getTime(), type(reqFields.getTime()), mod_req['time_event'], type(mod_req['time_event'])
         if reqFields.useSize():
-            #mod_req['size_event'] = [reqFields.getSize()]
-            print "Debugging update request: Size=", reqFields.getSize()
+            mod_req['size_event'] = [reqFields.getSize()]
+            #print "Debugging update request: Size=", reqFields.getSize()
         if reqFields.useGen():
             mod_req['generators'] = reqFields.getGen()
         if (reqFields.useCS() or reqFields.useFiltEff()
