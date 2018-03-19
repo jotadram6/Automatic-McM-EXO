@@ -239,6 +239,9 @@ externalLHEProducer = cms.EDProducer("ExternalLHEProducer",
 """.format(cards)
 
     if fragment != "" and tag != "":
+        fragment= str.replace(fragment,"https://github.com","https://raw.githubusercontent.com")
+        fragment = str.replace(fragment,"/blob","")
+        print fragment
         #gen_fragment_url = "https://raw.githubusercontent.com/cms-sw/genproductions/{0}/{1}".format(
         #    tag, fragment.split("Configuration/GenProduction/")[1])
         gen_fragment_url = fragment
