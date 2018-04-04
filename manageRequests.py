@@ -220,6 +220,25 @@ def formatFragment(file_, campaign_):
         print "Error: Cannot determine energy of campaign {0}.".format(campaign_)
         sys.exit(5)
 
+def fetchFragment(file_):
+    try:
+        if "http" in file_:
+            url = file_
+            print 'Fetching '+ url
+            FragmentFetched = urllib2.urlopen(url).read()
+            #print type(FragmentFetched)
+            #print FragmentFetched.split("\n")[:10]
+        elif "/afs/" in file_:
+            FObject = open(file_,"r")
+            FragmentFetched = FObject.read()
+            FObject.close()
+        else:
+            print "The fragment must be located in github, giving full raw address, or in lxplus!!!"
+    except Exception, e:
+        print e
+    return FragmentFetched
+    #return """ {0} """.format(FragmentFetched)
+
 def createLHEProducer(gridpack, cards, fragment, tag):
     code = """import FWCore.ParameterSet.Config as cms
 
@@ -243,13 +262,16 @@ externalLHEProducer = cms.EDProducer("ExternalLHEProducer",
         #    tag, fragment.split("Configuration/GenProduction/")[1])
         gen_fragment_url = fragment
         gen_fragment = urllib2.urlopen(gen_fragment_url).read()
+
         code += """
 {0}
 
 # Link to generator fragment:
 # {1}
 """.format(gen_fragment, gen_fragment_url)
-
+    #if "\t" in code: 
+    print code#.split("\n")[:10]
+    #print repr(code)
     return code
 
 def fillFields(csvfile, fields, campaign, PWG, notCreate_, McMTags):
@@ -278,7 +300,10 @@ def fillFields(csvfile, fields, campaign, PWG, notCreate_, McMTags):
         elif campaign is not None:
             tmpReq.setCamp(campaign)
         if fields[4] > -1:
-            tmpReq.setFrag(formatFragment(row[fields[4]],campaign))
+            #tmpReq.setFrag(formatFragment(row[fields[4]],campaign))
+            tmpReq.setMcMFrag(fetchFragment(row[fields[4]]))
+            #tmpReq.setMcMFrag(createLHEProducer(row[fields[18]], "", row[fields[4]], "1"))
+            #tmpReq.setFrag(formatFragment(row[fields[4]],campaign))
         if fields[5] > -1:
             tmpReq.setTime(row[fields[5]])
         if fields[6] > -1:
@@ -363,6 +388,8 @@ def createRequests(requests, num_requests, doDryRun, useDev):
             new_req['total_events'] = reqFields.getEvts()
         if reqFields.useMcMFrag():
             new_req['fragment'] = reqFields.getMcMFrag()
+            #if type(new_req['fragment'])==type(reqFields.getMcMFrag()): print "Same type of McMFrag object is propagated"
+            #if new_req['fragment']==reqFields.getMcMFrag(): print "Same McMFrag object is propagated"
         else:
             if reqFields.useFrag():
                 new_req['name_of_fragment'] = reqFields.getFrag()
@@ -482,17 +509,19 @@ def modifyRequests(requests, num_requests, doDryRun, useDev, isLHErequest):
             mod_req['total_events'] = reqFields.getEvts()
         if reqFields.useMcMFrag():
             mod_req['fragment'] = reqFields.getMcMFrag()
+            #mod_req['fragment'] = reqFields.getMcMFrag().replace('"""',"'")
         else:
+            #print "Modifying non LHE requests"
             if reqFields.useFrag():
-                mod_req['name_of_fragment'] = reqFields.getFrag()
+                mod_req['name_of_fragment'] = reqFields.getFrag()#.replace('"""',"'")
             if reqFields.useTag():
                 mod_req['fragment_tag'] = reqFields.getTag()
         if reqFields.useTime():
             mod_req['time_event'] = [reqFields.getTime()]
-            #print "Debugging update request: Time=", reqFields.getTime(), type(reqFields.getTime()), mod_req['time_event'], type(mod_req['time_event'])
+            print "Debugging update request: Time=", reqFields.getTime(), type(reqFields.getTime()), mod_req['time_event'], type(mod_req['time_event'])
         if reqFields.useSize():
             mod_req['size_event'] = [reqFields.getSize()]
-            #print "Debugging update request: Size=", reqFields.getSize()
+            print "Debugging update request: Size=", reqFields.getSize()
         if reqFields.useGen():
             mod_req['generators'] = reqFields.getGen()
         if (reqFields.useCS() or reqFields.useFiltEff()
@@ -534,7 +563,9 @@ def modifyRequests(requests, num_requests, doDryRun, useDev, isLHErequest):
             mod_req['tags'] += reqFields.getMcMTag()
 
         if not doDryRun:
+            #mod_req['fragment']=mod_req['fragment'].replace('"""',"'")
             answer = mcm.updateA('requests', mod_req) # Update request
+            #print "mod_req object: ", mod_req
             #print "Debugging update request: McM_Answer=", answer
             if answer['results']:
                 if not isLHErequest:
