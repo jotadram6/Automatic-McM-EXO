@@ -261,7 +261,8 @@ externalLHEProducer = cms.EDProducer("ExternalLHEProducer",
         #gen_fragment_url = "https://raw.githubusercontent.com/cms-sw/genproductions/{0}/{1}".format(
         #    tag, fragment.split("Configuration/GenProduction/")[1])
         gen_fragment_url = fragment
-        gen_fragment = urllib2.urlopen(gen_fragment_url).read()
+        #gen_fragment = urllib2.urlopen(gen_fragment_url).read()
+        gen_fragment = fetchFragment(fragment)
 
         code += """
 {0}
@@ -270,7 +271,7 @@ externalLHEProducer = cms.EDProducer("ExternalLHEProducer",
 # {1}
 """.format(gen_fragment, gen_fragment_url)
     #if "\t" in code: 
-    print code#.split("\n")[:10]
+    #print code#.split("\n")[:10]
     #print repr(code)
     return code
 
@@ -343,7 +344,8 @@ def fillFields(csvfile, fields, campaign, PWG, notCreate_, McMTags):
                 if fields[4] > -1 and fields[7]:
                     tmpReq.setMcMFrag(createLHEProducer(row[fields[18]],
                                                         row[fields[19]],
-                                                        formatFragment(row[fields[4]], campaign),
+                                                        row[fields[4]],
+                                                        #formatFragment(row[fields[4]], campaign),
                                                         row[fields[7]]))
                 else:
                     tmpReq.setMcMFrag(createLHEProducer(row[fields[18]],
