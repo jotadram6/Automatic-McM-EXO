@@ -367,6 +367,7 @@ def fillFields(csvfile, fields, campaign, PWG, notCreate_, McMTags):
 
 def createRequests(requests, num_requests, doDryRun, useDev):
     # Create new requests based on campaign and PWG
+    print "Is dev being used? ----------------------_> ", useDev
     mcm = restful(dev=useDev) # Get McM connection
 
     if not doDryRun:
@@ -411,11 +412,17 @@ def createRequests(requests, num_requests, doDryRun, useDev):
             new_req['tags'] = reqFields.getMcMTag()
 
         if not doDryRun:
+            #print "DEBUG 1 -----------------------> ", "Dictionary prepared:", new_req
             answer = mcm.putA('requests', new_req) # Create request
+            #print "DEBUG 2 -----------------------> ", answer
+            #print "DEBUG 3 -----------------------> ", answer['results']
+            #print "DEBUG 4 -----------------------> ", answer['prepid']
             if answer['results']:
                 # Cannot fill generator parameters while creating a new request
                 # Modify newly created request with generator parameters
                 # Get newly created request
+                print "Succesfully created request:", answer['prepid']
+                mcm = restful(dev=useDev)
                 mod_req = mcm.getA('requests', answer['prepid'])
                 # Fill generator parameters
                 mod_req['generator_parameters'][0]['cross_section'] \
@@ -479,6 +486,7 @@ def modifyRequests(requests, num_requests, doDryRun, useDev, isLHErequest):
             failed_to_get = True
             for tries in range(3):
                 time.sleep(0.1)
+                mcm = restful(dev=useDev)
                 mod_req_list = mcm.getA('requests', query=query_string)
                 if mod_req_list is not None:
                     failed_to_get = False
@@ -501,6 +509,7 @@ def modifyRequests(requests, num_requests, doDryRun, useDev, isLHErequest):
                 print "\033[0;31mPrepId is missing.\033[0;m"
                 continue
             time.sleep(0.1)
+            mcm = restful(dev=useDev)
             mod_req = mcm.getA('requests', reqFields.getPrepId())
 
         if reqFields.useDataSetName() and not isLHErequest:
@@ -520,10 +529,10 @@ def modifyRequests(requests, num_requests, doDryRun, useDev, isLHErequest):
                 mod_req['fragment_tag'] = reqFields.getTag()
         if reqFields.useTime():
             mod_req['time_event'] = [reqFields.getTime()]
-            print "Debugging update request: Time=", reqFields.getTime(), type(reqFields.getTime()), mod_req['time_event'], type(mod_req['time_event'])
+            #print "Debugging update request: Time=", reqFields.getTime(), type(reqFields.getTime()), mod_req['time_event'], type(mod_req['time_event'])
         if reqFields.useSize():
             mod_req['size_event'] = [reqFields.getSize()]
-            print "Debugging update request: Size=", reqFields.getSize()
+            #print "Debugging update request: Size=", reqFields.getSize()
         if reqFields.useGen():
             mod_req['generators'] = reqFields.getGen()
         if (reqFields.useCS() or reqFields.useFiltEff()
@@ -563,6 +572,13 @@ def modifyRequests(requests, num_requests, doDryRun, useDev, isLHErequest):
             mod_req['notes'] = reqFields.getNotes()
         if reqFields.useMcMTag():
             mod_req['tags'] += reqFields.getMcMTag()
+        
+        #Avoiding to have unset generator parameters
+        if mod_req['generator_parameters'][0]['cross_section'] < 0: mod_req['generator_parameters'][0]['cross_section'] = 1.0
+        if mod_req['generator_parameters'][0]['filter_efficiency'] < 0: mod_req['generator_parameters'][0]['filter_efficiency'] = 1.0
+        if mod_req['generator_parameters'][0]['filter_efficiency_error'] < 0: mod_req['generator_parameters'][0]['filter_efficiency_error'] = 0.0
+        if mod_req['generator_parameters'][0]['match_efficiency'] < 0: mod_req['generator_parameters'][0]['match_efficiency'] = 1.0
+        if mod_req['generator_parameters'][0]['match_efficiency_error'] < 0: mod_req['generator_parameters'][0]['match_efficiency_error'] = 0.0
 
         if not doDryRun:
             #mod_req['fragment']=mod_req['fragment'].replace('"""',"'")
@@ -604,6 +620,7 @@ def cloneRequests(requests, num_requests, doDryRun, useDev, cloneId_):
         print "Dry run. {0} requests will not be added to McM using clone.".format(
             num_requests)
     for reqFields in requests:
+        mcm = restful(dev=useDev)
         clone_req = mcm.getA('requests', cloneId_) # Get request to clone
         if reqFields.useDataSetName():
             clone_req['dataset_name'] = reqFields.getDataSetName()
