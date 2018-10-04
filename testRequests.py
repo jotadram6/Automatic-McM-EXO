@@ -23,7 +23,7 @@ sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
 from rest import * # Load class to access McM
 from requestClass import * # Load class to store request information
 
-def getArguments():
+def getrguments():
     parser = argparse.ArgumentParser(description='Test McM requests.')
 
     # Command line flags
@@ -142,8 +142,8 @@ def createTest(compactPrepIDList, outputFile, nEvents):
         if searched is None:
             csvfile.writerow([req.getPrepId(), req.getJobID(), "", ""])
         else:
-            mcm = restful(dev=False) # Get McM connection
-            mcm_req = mcm.getA('chained_requests', req.getPrepId())
+            mcm = McM(dev=False) # Get McM connection
+            mcm_req = mcm.get('chained_requests', req.getPrepId())
             wmLHEPrepId = mcm_req['chain'][0]
             GSPrepId = mcm_req['chain'][1]
             csvfile.writerow([wmLHEPrepId, req.getJobID(), "", ""])
@@ -458,7 +458,7 @@ def extractTest(csvFile):
     return
 
 def main():
-    args = getArguments() # Setup flags and get arguments
+    args = getrguments() # Setup flags and get arguments
     if args.ids and args.csv:
         print "Error: Cannot use both -i and -f."
         sys.exit(1)

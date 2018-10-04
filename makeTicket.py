@@ -19,7 +19,7 @@ sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
 from rest import * # Load class to access McM
 
 
-def getArguments():
+def getrguments():
     parser = argparse.ArgumentParser(
         description='Script to creat tickets in McM.')
 
@@ -101,7 +101,7 @@ def parseIDList(compactList):
 
 
 def createTicket(requests, pwg, chain, block, repititions, staged):
-    mcm = restful(dev=False)
+    mcm = McM(dev=False)
     ticket = {'prepid': pwg, 'pwg': pwg, 'block': block,
               'chains': [chain], 'repetitions': repititions,
               'requests': requests
@@ -119,7 +119,7 @@ def createTicket(requests, pwg, chain, block, repititions, staged):
     #           'requests': ['EXO-RunIIWinter15wmLHE-00288']
     #                         }
 
-    answer = mcm.putA('mccms', ticket)
+    answer = mcm.put('mccms', ticket)
     if answer['results']:
         print "Created {0}".format(answer['prepid'])
     else:
@@ -129,8 +129,8 @@ def createTicket(requests, pwg, chain, block, repititions, staged):
 
 
 def modifyTicket():
-    mcm = restful(dev=False)
-    ticket = mcm.getA('mccms', 'EXO-2016Mar30-00024')
+    mcm = McM(dev=False)
+    ticket = mcm.get('mccms', 'EXO-2016Mar30-00024')
     #ticket['block'] = 2
     #ticket['chains'] = ['RunIISpring16DR80PU2016MiniAODv1']
     #ticket['chains'] = ['RunIISpring16DR80PU2016MiniAODv1wmLHE']
@@ -149,7 +149,7 @@ def modifyTicket():
 
 
 def main():
-    args = getArguments() # Setup flags and get arguments
+    args = getrguments() # Setup flags and get arguments
 
     (args.chain, args.block, args.repititions, args.staged) = interrogate()
 

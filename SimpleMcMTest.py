@@ -25,15 +25,15 @@ auto_bw = False
 database_location = 'MC_Requests.db'
 html_location = ''
 
-mcm = restful(dev=False)
-mod_req = mcm.getA(u'requests', u'EXO-PhaseIISummer17GenOnly-00006')
+mcm = McM(dev=False)
+mod_req = mcm.get(u'requests', u'EXO-PhaseIISummer17GenOnly-00006')
 
 print mod_req
 
-mod_req = mcm.getA('requests', 'EXO-PhaseIISummer17wmLHEGENOnly-00015')
+mod_req = mcm.get('requests', 'EXO-PhaseIISummer17wmLHEGENOnly-00015')
 
 #print mod_req
 
-#mod_req = mcm.getA('requests', 'EXO-RunIIFall17GS-00041')
+#mod_req = mcm.get('requests', 'EXO-RunIIFall17GS-00041')
 #
 #print mod_req
