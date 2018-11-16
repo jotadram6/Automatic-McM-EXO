@@ -213,7 +213,8 @@ def formatFragment(file_, campaign_):
     elif campaign_ in ['Fall13', 'RunIIFall14GS', 'RunIIWinter15GS',
                        'RunIIWinter15wmLHE', 'RunIIWinter15pLHE',
                        'RunIISummer15GS', 'RunIISummer15wmLHEGS', 
-                       'RunIIFall17GS', 'RunIIFall17pLHE', 'RunIIFall17wmLHEGS']:
+                       'RunIIFall17GS', 'RunIIFall17pLHE', 'RunIIFall17wmLHEGS', 
+                       'RunIIFall18GS', 'RunIIFall18pLHE', 'RunIIFall18wmLHEGS']:
         #return "Configuration/GenProduction/python/ThirteenTeV/Hadronizer/"+file_
         return "Configuration/GenProduction/python/ThirteenTeV/"+file_
     else:
