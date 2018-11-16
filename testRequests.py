@@ -20,6 +20,7 @@ import argparse
 import csv
 import re
 import glob
+import time
 sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
 from rest import * # Load class to access McM
 from requestClass import * # Load class to store request information
@@ -31,7 +32,7 @@ def getArguments():
     parser.add_argument('-i', '--ids', dest='ids', help=
                         'List of PrepIDs to be tested. Separate range by >.')
     parser.add_argument('-f', '--file', dest='csv', help='Input CSV file.')
-    parser.add_argument('-o', '--output', dest='output', default='test.csv',
+    parser.add_argument('-o', '--output', dest='output', default='test_{}.csv'.format(int(time.time())),
                         help='Output CSV file')
     parser.add_argument('-b', '--bsub', dest='bsub', action='store_true', help='Use bsub instead of condor')
     parser.add_argument('-n', dest='nEvents', help='Number of events to test.')
