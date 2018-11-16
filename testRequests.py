@@ -19,11 +19,12 @@ import subprocess
 import argparse
 import csv
 import re
+import glob
 sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
 from rest import * # Load class to access McM
 from requestClass import * # Load class to store request information
 
-def getrguments():
+def getArguments():
     parser = argparse.ArgumentParser(description='Test McM requests.')
 
     # Command line flags
@@ -32,6 +33,7 @@ def getrguments():
     parser.add_argument('-f', '--file', dest='csv', help='Input CSV file.')
     parser.add_argument('-o', '--output', dest='output', default='test.csv',
                         help='Output CSV file')
+    parser.add_argument('-b', '--bsub', dest='bsub', action='store_true', help='Use bsub instead of condor')
     parser.add_argument('-n', dest='nEvents', help='Number of events to test.')
 
     args_ = parser.parse_args()
@@ -79,29 +81,33 @@ def parseIDList(compactList):
             sys.exit(3)
     return requests
 
-def getTestScript(PrepID, nEvents):
+def getTestScript(PrepID, nEvents, use_bsub=False):
     request_type = "requests"
     if "chain_" in PrepID:
         request_type = "chained_requests"
 
     get_test = ""
+    if use_bsub:
+        scriptFile = "{}.sh".format(PrepID)
+    else:
+        scriptFile = "test_{}/{}.sh".format(PrepID, PrepID)
     if nEvents is None:
         get_test =  "curl -s --insecure \
-https://cms-pdmv.cern.ch/mcm/public/restapi/{0}/get_test/{1} -o {2}.sh".format(
-            request_type, PrepID, PrepID)
+https://cms-pdmv.cern.ch/mcm/public/restapi/{0}/get_test/{1} -o {2}".format(
+            request_type, PrepID, scriptFile)
     else:
         # add "/N" to end of URL to get N events
+        os.system("mkdir -pv test_{}".format(PrepID))
         get_test =  "curl -s --insecure \
-https://cms-pdmv.cern.ch/mcm/public/restapi/{0}/get_test/{1}/{2} -o {3}.sh".format(
-            request_type, PrepID, nEvents, PrepID)
+https://cms-pdmv.cern.ch/mcm/public/restapi/{0}/get_test/{1}/{2} -o {3}".format(
+            request_type, PrepID, nEvents, scriptFile)
     print get_test
     subprocess.call(get_test, shell=True)
 
     if request_type == "chained_requests" and nEvents is not None:
-        filename = "{0}.sh".format(PrepID)
-        tmpfilename = "tmp{0}.sh".format(PrepID)
-        inputfile = open(filename, 'r')
-        outputfile = open(tmpfilename, 'w')
+        tmpScriptFile = "tmp{}".format(scriptFile)
+        inputfile = open(scriptFile, 'r')
+        outputfile = open(tmpScriptFile, 'w')
         for line in inputfile:
             outline = re.sub('(.*--eventcontent LHE.*-n) \d*( .*)',
                              r'\1 {0}\2'.format(nEvents), line)
@@ -112,9 +118,9 @@ https://cms-pdmv.cern.ch/mcm/public/restapi/{0}/get_test/{1}/{2} -o {3}.sh".form
             outputfile.write(outline)
         inputfile.close()
         outputfile.close()
-        os.rename(tmpfilename, filename)
+        os.rename(tmpScriptFile, scriptFile)
 
-    subprocess.call("chmod 755 {0}.sh".format(PrepID), shell=True)
+    subprocess.call("chmod 755 {}".format(scriptFile), shell=True)
     return
 
 def submitToBatch(PrepId):
@@ -126,7 +132,17 @@ def submitToBatch(PrepId):
     jobID = match.group(1)
     return jobID
 
-def createTest(compactPrepIDList, outputFile, nEvents):
+def submitToCondor(PrepId):
+    batch_command = "csub {}.sh -t workday -d test_{}".format(PrepId, PrepId)
+    print batch_command
+    output = subprocess.Popen(batch_command, stdout=subprocess.PIPE,
+                              shell=True).communicate()[0]
+    print output
+    match = re.search('submitted to cluster (\d*)', output)
+    jobID = match.group(1)
+    return jobID
+
+def createTest(compactPrepIDList, outputFile, nEvents, use_bsub=False):
     requests = parseIDList(compactPrepIDList)
 
     csvfile = csv.writer(open(outputFile, 'w'))
@@ -136,7 +152,10 @@ def createTest(compactPrepIDList, outputFile, nEvents):
     print "Testing {0} requests".format(len(requests))
     for req in requests:
         getTestScript(req.getPrepId(), nEvents)
-        jobID = submitToBatch(req.getPrepId())
+        if use_bsub:
+            jobID = submitToBatch(req.getPrepId())
+        else:
+            jobID = submitToCondor(req.getPrepId())
         req.setJobID(jobID)
         searched = re.search('chain_', req.getPrepId())
         if searched is None:
@@ -357,7 +376,7 @@ def rewriteCSVFile(csvfile, requests):
                             sizePerEvent, matchEff])
     return
 
-def getTimeSizeFromFile(stdoutFile, iswmLHE):
+def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False):
     totalSize = 0
     timePerEvent = 0
     nEvents = 0
@@ -366,8 +385,8 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE):
     matchEff = 0
     fileContents = open(stdoutFile, 'r')
     for line in fileContents:
-        #match = re.match('<TotalEvents>(\d*)</TotalEvents>', line)
-        match = re.match('(\d*) events were ran', line)
+        match = re.match('<TotalEvents>(\d*)</TotalEvents>', line)
+        #match = re.match('(\d*) events were ran', line)
         if match is not None:
             nEvents = float(match.group(1))
             continue
@@ -414,22 +433,35 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE):
         sizePerEvent = totalSize*1024.0/nEvents
     else:
         sizePerEvent = -1
-    print "Found time and size:", timePerEvent, sizePerEvent, matchEff
+    print "Found (time, size, matchEff)=({}, {}, {}) in file {}:".format(timePerEvent, sizePerEvent, matchEff, stdoutFile)
     return timePerEvent, sizePerEvent, matchEff
 
-def getTimeSize(requests):
+def getTimeSize(requests, use_bsub=False, force_update=False):
     number_complete = 0
     for req in requests:
-        if not req.useTime() or not req.useSize():
-            stdoutFile = "LSFJOB_{0}/STDOUT".format(req.getJobID())
+        if not req.useTime() or not req.useSize() or force_update:
+            if use_bsub:
+                stdoutFile = "LSFJOB_{0}/STDOUT".format(req.getJobID())
+            else:
+                stdoutCandidates = glob.glob("test_{}/*{}*.stdout".format(req.getPrepId(), req.getJobID()))
+                if len(stdoutCandidates) == 0:
+                    print "[getTimeSize] WARNING : Didn't find output file for request {}".format(req.getJobID())
+                elif len(stdoutCandidates) >= 1:
+                    # Multiple attempts: use latest
+                    stdoutCandidates.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+                stdoutFile = stdoutCandidates[0]
             if os.path.exists(stdoutFile):
                 number_complete += 1
                 iswmLHE = False
                 searched = re.search('wmLHE', req.getPrepId())
                 if searched is not None:
                     iswmLHE = True
-                timePerEvent, sizePerEvent, matchEff = getTimeSizeFromFile(stdoutFile,
-                                                                 iswmLHE)
+                timePerEvent, sizePerEvent, matchEff = getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=use_bsub)
+
+                if timePerEvent == 0:
+                    print "[getTimeSize] WARNING : timePerEvent=0 for request {}. Try resubmitting.".format(req.getPrepId())
+                    print "testRequests.py -n 20 -i {}".format(req.getPrepId())
+
                 req.setTime(timePerEvent)
                 req.setSize(sizePerEvent)
                 req.setMatchEff(matchEff)
@@ -443,29 +475,29 @@ def getTimeSize(requests):
             number_complete, len(requests), len(requests) - number_complete)
     return
 
-def extractTest(csvFile):
-    csvfile = open(csvFile, 'r') # Open CSV file
+def extractTest(inputCsvFilePath, force_update=False, use_bsub=False):
+    inputCsvFile = open(inputCsvFilePath, 'r') # Open CSV file
     fields = getFields(csvfile)  # Get list of field indices
     # Fill list of request objects from CSV file and get number of requests
-    requests, num_requests = fillFields(csvfile, fields)
-    csvfile.close()
+    requests, num_requests = fillFields(inputCsvFile, fields)
+    inputCsvFile.close()
 
-    getTimeSize(requests)
+    getTimeSize(requests, force_update=force_update, use_bsub=use_bsub)
 
-    csvfile = open(csvFile, 'w')
-    rewriteCSVFile(csvfile, requests)
+    outputCsvFile = open("results_{}".format(inputCsvFilePath), 'w')
+    rewriteCSVFile(outputCsvFile, requests)
 
     return
 
 def main():
-    args = getrguments() # Setup flags and get arguments
+    args = getArguments() # Setup flags and get arguments
     if args.ids and args.csv:
         print "Error: Cannot use both -i and -f."
         sys.exit(1)
     elif args.ids:
-        createTest(args.ids, args.output, args.nEvents)
+        createTest(args.ids, args.output, args.nEvents, use_bsub=args.bsub)
     elif args.csv:
-        extractTest(args.csv)
+        extractTest(args.csv, use_bsub=args.bsub)
     else:
         print "Error: Must use either -i or -f."
         sys.exit(2)
