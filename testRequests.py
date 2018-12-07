@@ -140,6 +140,9 @@ def submitToCondor(PrepId):
                               shell=True).communicate()[0]
     print output
     match = re.search('submitted to cluster (\d*)', output)
+    if not match:
+        print "[submitToCondor] ERROR : Couldn't find string 'submitted to cluster' in output line."
+        sys.exit(1)
     jobID = match.group(1)
     return jobID
 
@@ -377,58 +380,66 @@ def rewriteCSVFile(csvfile, requests):
                             sizePerEvent, matchEff])
     return
 
-def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False):
+def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
     totalSize = 0
     timePerEvent = 0
     nEvents = 0
     XsBeforeMatch = 0
     XsAfterMatch = 0
     matchEff = 0
-    fileContents = open(stdoutFile, 'r')
-    for line in fileContents:
-        match = re.match('<TotalEvents>(\d*)</TotalEvents>', line)
-        #match = re.match('(\d*) events were ran', line)
-        if match is not None:
-            nEvents = float(match.group(1))
-            continue
-        match = re.match('    <Metric Name="Timing-tstoragefile-write-totalMegabytes" Value="(\d*\.\d*)"/>',
-                         line)
-        if match is not None:
-            totalSize = float(match.group(1))
-            continue
-        if 'Before matching' in line: 
-            XsBeforeMatch=float(line.split('=')[-1].split('+-')[0])
-            print "Cross section Before Matching:", XsBeforeMatch
-        if 'After matching' in line: 
-            XsAfterMatch=float(line.split('=')[-1].split('+-')[0])
-            print "Cross section After Matching: ", XsAfterMatch
-        if XsAfterMatch!=0 and XsBeforeMatch!=0: matchEff=XsAfterMatch/XsBeforeMatch
-        timePerEvent1=0; timePerEvent2=0; timePerEvent3=0; timePerEvent4=0;
-        match = re.match('    <Metric Name="AvgEventCPU" Value="(\d*\.\d*)"/>',
-                         line)
-        if match is not None:
-            timePerEvent1 = float(match.group(1))
-            continue
-        match = re.match('    <Metric Name="TotalJobCPU" Value="(\d*\.\d*)"/>',
-                         line)
-        if match is not None:
-            timePerEvent2 = float(match.group(1))
-            continue
-        match = re.match('    <Metric Name="AvgEventTime" Value="(\d*\.\d*)"/>',
-                         line)
-        if match is not None:
-            timePerEvent3 = float(match.group(1))
-            continue
-        match = re.match('    <Metric Name="TotalJobTime" Value="(\d*\.\d*)"/>',
-                         line)
-        if match is not None:
-            timePerEvent4 = float(match.group(1))
-            timePerEvent=max(timePerEvent1,timePerEvent2,timePerEvent3,timePerEvent4)/nEvents
-            if not iswmLHE:
-                matchEff=1.0
+    filesToParse = [stdoutFile]
+    if stderrFile:
+        filesToParse.append(stderrFile)
+    for fileToParse in filesToParse:
+        fileContents = open(fileToParse, 'r')
+        for line in fileContents:
+            match = re.match('<TotalEvents>(\d*)</TotalEvents>', line)
+            #match = re.match('(\d*) events were ran', line)
+            if match is not None:
+                nEvents = float(match.group(1))
                 continue
-            else:
-                break
+            match = re.match('    <Metric Name="Timing-tstoragefile-write-totalMegabytes" Value="(\d*\.\d*)"/>',
+                             line)
+            if match is not None:
+                totalSize = float(match.group(1))
+                continue
+            if 'Before matching' in line: 
+                XsBeforeMatch=float(line.split('=')[-1].split('+-')[0])
+                print "Cross section Before Matching:", XsBeforeMatch
+            if 'After matching' in line: 
+                XsAfterMatch=float(line.split('=')[-1].split('+-')[0])
+                print "Cross section After Matching: ", XsAfterMatch
+            if XsAfterMatch!=0 and XsBeforeMatch!=0: matchEff=XsAfterMatch/XsBeforeMatch
+            timePerEvent1=0; timePerEvent2=0; timePerEvent3=0; timePerEvent4=0;
+            match = re.match('    <Metric Name="AvgEventCPU" Value="(\d*\.\d*)"/>',
+                             line)
+            if match is not None:
+                timePerEvent1 = float(match.group(1))
+                continue
+
+            match = re.match('    <Metric Name="TotalJobCPU" Value="(\d*\.\d*)"/>',
+                             line)
+            if match is not None:
+                timePerEvent2 = float(match.group(1))
+                continue
+
+            match = re.match('    <Metric Name="AvgEventTime" Value="(\d*\.\d*)"/>',
+                             line)
+            if match is not None:
+                timePerEvent3 = float(match.group(1))
+                continue
+
+            match = re.match('    <Metric Name="TotalJobTime" Value="(\d*\.\d*)"/>',
+                             line)
+            if match is not None:
+                timePerEvent4 = float(match.group(1))
+                timePerEvent=max(timePerEvent1,timePerEvent2,timePerEvent3,timePerEvent4)/nEvents
+                print "Found timePerEvent=max({}, {}, {}, {})/{} = {}".format(timePerEvent1, timePerEvent2, timePerEvent3, timePerEvent4, nEvents, timePerEvent)
+                if not iswmLHE:
+                    matchEff=1.0
+                    continue
+                else:
+                    break
 
     if nEvents != 0:
         sizePerEvent = totalSize*1024.0/nEvents
@@ -443,6 +454,7 @@ def getTimeSize(requests, use_bsub=False, force_update=False):
         if not req.useTime() or not req.useSize() or force_update:
             if use_bsub:
                 stdoutFile = "LSFJOB_{0}/STDOUT".format(req.getJobID())
+                stderrFile = None
             else:
                 stdoutCandidates = glob.glob("test_{}/*{}*.stdout".format(req.getPrepId(), req.getJobID()))
                 if len(stdoutCandidates) == 0:
@@ -451,13 +463,21 @@ def getTimeSize(requests, use_bsub=False, force_update=False):
                     # Multiple attempts: use latest
                     stdoutCandidates.sort(key=lambda x: os.path.getmtime(x), reverse=True)
                 stdoutFile = stdoutCandidates[0]
+
+                stderrCandidates = glob.glob("test_{}/*{}*.stderr".format(req.getPrepId(), req.getJobID()))
+                if len(stderrCandidates) == 0:
+                    print "[getTimeSize] WARNING : Didn't find output stderr file for request {}".format(req.getJobID())
+                elif len(stderrCandidates) >= 1:
+                    # Multiple attempts: use latest
+                    stderrCandidates.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+                stderrFile = stderrCandidates[0]
             if os.path.exists(stdoutFile):
                 number_complete += 1
                 iswmLHE = False
                 searched = re.search('wmLHE', req.getPrepId())
                 if searched is not None:
                     iswmLHE = True
-                timePerEvent, sizePerEvent, matchEff = getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=use_bsub)
+                timePerEvent, sizePerEvent, matchEff = getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=use_bsub, stderrFile=stderrFile)
 
                 if timePerEvent == 0:
                     print "[getTimeSize] WARNING : timePerEvent=0 for request {}. Try resubmitting.".format(req.getPrepId())
@@ -478,7 +498,7 @@ def getTimeSize(requests, use_bsub=False, force_update=False):
 
 def extractTest(inputCsvFilePath, force_update=False, use_bsub=False):
     inputCsvFile = open(inputCsvFilePath, 'r') # Open CSV file
-    fields = getFields(csvfile)  # Get list of field indices
+    fields = getFields(inputCsvFile)  # Get list of field indices
     # Fill list of request objects from CSV file and get number of requests
     requests, num_requests = fillFields(inputCsvFile, fields)
     inputCsvFile.close()
