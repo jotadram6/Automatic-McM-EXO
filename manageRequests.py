@@ -23,7 +23,7 @@ sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
 from rest import * # Load class to access McM
 from requestClass import * # Load class to store request information
 
-def getrguments():
+def getArguments():
     parser = argparse.ArgumentParser(
         description='Create, modify, and clone McM requests.')
 
@@ -213,7 +213,8 @@ def formatFragment(file_, campaign_):
     elif campaign_ in ['Fall13', 'RunIIFall14GS', 'RunIIWinter15GS',
                        'RunIIWinter15wmLHE', 'RunIIWinter15pLHE',
                        'RunIISummer15GS', 'RunIISummer15wmLHEGS', 
-                       'RunIIFall17GS', 'RunIIFall17pLHE', 'RunIIFall17wmLHEGS']:
+                       'RunIIFall17GS', 'RunIIFall17pLHE', 'RunIIFall17wmLHEGS', 
+                       'RunIIFall18GS', 'RunIIFall18pLHE', 'RunIIFall18wmLHEGS']:
         #return "Configuration/GenProduction/python/ThirteenTeV/Hadronizer/"+file_
         return "Configuration/GenProduction/python/ThirteenTeV/"+file_
     else:
@@ -234,8 +235,10 @@ def fetchFragment(file_):
             FObject.close()
         else:
             print "The fragment must be located in github, giving full raw address, or in lxplus!!!"
+            print file_
     except Exception, e:
         print e
+        return None
     return FragmentFetched
     #return """ {0} """.format(FragmentFetched)
 
@@ -278,7 +281,14 @@ externalLHEProducer = cms.EDProducer("ExternalLHEProducer",
 def fillFields(csvfile, fields, campaign, PWG, notCreate_, McMTags):
     requests = [] # List containing request objects
     num_requests = 0
+
     for row in csv.reader(csvfile):
+        if "http" in row[fields[4]]:
+            time.sleep(1)
+            print num_requests % 15
+            if num_requests % 15 == 14:
+                print "[fillFields] INFO : Sleeping to avoid HTTP Error 429: Too Many Requests"
+                time.sleep(20)
         if row[0].startswith("#"):
             continue
         num_requests += 1
@@ -302,7 +312,12 @@ def fillFields(csvfile, fields, campaign, PWG, notCreate_, McMTags):
             tmpReq.setCamp(campaign)
         if fields[4] > -1:
             #tmpReq.setFrag(formatFragment(row[fields[4]],campaign))
-            tmpReq.setMcMFrag(fetchFragment(row[fields[4]]))
+            fragment = fetchFragment(row[fields[4]])
+            if fragment:
+                tmpReq.setMcMFrag(fragment)
+            else:
+                print "[fillFields] WARNING : Failed to get fragment " + row[fields[4]] + "!"
+                sys.exit(1)
             #tmpReq.setMcMFrag(createLHEProducer(row[fields[18]], "", row[fields[4]], "1"))
             #tmpReq.setFrag(formatFragment(row[fields[4]],campaign))
         if fields[5] > -1:
@@ -690,7 +705,7 @@ def cloneRequests(requests, num_requests, doDryRun, useDev, cloneId_):
             pprint.pprint(clone_req)
 
 def main():
-    args = getrguments() # Setup flags and get arguments
+    args = getArguments() # Setup flags and get arguments
     checkPWG(args.pwg) # Make sure PWG is an actual PWG
     # Check that script is not asked to both modify and clone
     # Store variable that is true if script is asked to modify or clone
