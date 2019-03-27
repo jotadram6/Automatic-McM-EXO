@@ -134,7 +134,7 @@ def submitToBatch(PrepId):
     return jobID
 
 def submitToCondor(PrepId):
-    batch_command = "csub {}.sh -t workday -d test_{}".format(PrepId, PrepId)
+    batch_command = "./csub {}.sh -t workday -d test_{}".format(PrepId, PrepId)
     print batch_command
     output = subprocess.Popen(batch_command, stdout=subprocess.PIPE,
                               shell=True).communicate()[0]
@@ -394,12 +394,19 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
         fileContents = open(fileToParse, 'r')
         for line in fileContents:
             match = re.match('<TotalEvents>(\d*)</TotalEvents>', line)
-            #match = re.match('(\d*) events were ran', line)
+            if match is not None:
+                nEvents = float(match.group(1))
+                continue
+            match = re.match('(\d*) events were ran', line)
             if match is not None:
                 nEvents = float(match.group(1))
                 continue
             match = re.match('    <Metric Name="Timing-tstoragefile-write-totalMegabytes" Value="(\d*\.\d*)"/>',
                              line)
+            if match is not None:
+                totalSize = float(match.group(1))
+                continue
+            match = re.match('total (\d*)K', line)
             if match is not None:
                 totalSize = float(match.group(1))
                 continue
