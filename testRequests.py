@@ -154,8 +154,8 @@ def createTest(compactPrepIDList, outputFile, nEvents, use_bsub=False):
                       'Size per event [kB]'])
 
     print "Testing {0} requests".format(len(requests))
-    if not use_bsub:
-        os.system("csub_tar --cmssw")
+    #if not use_bsub:
+    #    os.system("csub_tar --cmssw")
     for req in requests:
         getTestScript(req.getPrepId(), nEvents)
         if use_bsub:
