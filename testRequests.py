@@ -134,7 +134,7 @@ def submitToBatch(PrepId):
     return jobID
 
 def submitToCondor(PrepId):
-    batch_command = "./csub {}.sh -t workday -d test_{}".format(PrepId, PrepId)
+    batch_command = "csub {}.sh -t workday -d test_{} --os SLCern6".format(PrepId, PrepId)
     print batch_command
     output = subprocess.Popen(batch_command, stdout=subprocess.PIPE,
                               shell=True).communicate()[0]
@@ -154,6 +154,8 @@ def createTest(compactPrepIDList, outputFile, nEvents, use_bsub=False):
                       'Size per event [kB]'])
 
     print "Testing {0} requests".format(len(requests))
+    #if not use_bsub:
+    #    os.system("csub_tar --cmssw")
     for req in requests:
         getTestScript(req.getPrepId(), nEvents)
         if use_bsub:
