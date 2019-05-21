@@ -24,6 +24,10 @@ def Validator(prepid):
     #Starting cehcking cases
     if mod_req[u'approval'] == u'none' or (mod_req[u'approval'] == u'validation' and mod_req[u'status'] == u'validation'):
         ValidationOut = mcm.approve(u'requests', prepid)
+        if ValidationOut[u'results']:
+            print "-------------------------------------------------------------"
+            print "Request "+prepid+" moved to approval: "+ValidationOut[u'approval']
+            print "-------------------------------------------------------------"
         TrialCounter=1
         TrialMessages=[]
         while not ValidationOut[u'results']:
@@ -32,15 +36,19 @@ def Validator(prepid):
             ValidationOut = mcm.approve(u'requests', prepid)
             TrialCounter+=1
             if TrialCounter>4: 
+                print "-------------------------------------------------------------"
                 print "Not able to validate "+prepid
                 print "Failed validation messages: ", TrialMessages
                 print "Please check!!!!!!"
+                print "-------------------------------------------------------------"
     else:
+        print "-------------------------------------------------------------"
         print "The request "+prepid+" is currently in status: "+mod_req[u'approval']+", "+mod_req[u'status']
         print "No action taken. Nothing to be done."
+        print "-------------------------------------------------------------"
 
 if __name__ == '__main__':
-    ToCheck=[u'EXO-RunIIFall18GS-01778',u'EXO-RunIIFall18GS-01290']
+    ToCheck=[u'EXO-RunIIFall18GS-01778',u'EXO-RunIIFall18GS-01290',u'EXO-RunIIFall18GS-01291',u'EXO-RunIIFall18GS-01292']
     for i in ToCheck:
         print "Starting validation on: "+i
         Validator(i)
