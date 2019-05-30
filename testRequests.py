@@ -27,6 +27,13 @@ from requestClass import * # Load class to store request information
 
 # Regexes
 re_filtereff = re.compile("Filter efficiency.*=.*= (?P<n1>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) \+- (?P<n2>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?).*\[TO BE USED IN MCM\]")
+re_matcheff = re.compile("Matching efficiency = (?P<n1>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) \+/- (?P<n2>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?).*\[TO BE USED IN MCM\]")
+re_totalevents = re.compile("<TotalEvents>(\d*)</TotalEvents>")
+re_totalevents2 = re.compile('(\d*) events were ran')
+re_totalsize = re.compile('<Metric Name="Timing-tstoragefile-write-totalMegabytes" Value="(\d*\.\d*)"/>')
+re_totalsize2 = re.compile("total (\d*)K")
+re_jobTime = re.compile('<Metric Name="(?:TotalJobCPU|TotalJobTime)" Value="(\d*\.\d*)"/>')
+re_avgEventTime = re.compile('<Metric Name="(?:AvgEventCPU|AvgEventTime)" Value="(\d*\.\d*)"/>')
 
 def getArguments():
     parser = argparse.ArgumentParser(description='Test McM requests.')
@@ -434,84 +441,91 @@ def rewriteCSVFile(csvfile, requests):
 
 def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
     totalSize = 0
-    timePerEvent = 0
-    nEvents = 0
+    jobTimeCandidates = []
+    avgEventTimeCandidates = []
+    nEventsCandidates = []
     XsBeforeMatch = 0
     XsAfterMatch = 0
-    matchEff = 0
-    filterEff = 1
-    filterEffErr = 0
+    matchEff = 1.0
+    matchEffErr = 0.0
+    filterEff = 1.0
+    filterEffErr = 0.0
+
     filesToParse = [stdoutFile]
     if stderrFile:
         filesToParse.append(stderrFile)
     for fileToParse in filesToParse:
         fileContents = open(fileToParse, 'r')
         for line in fileContents:
-            match = re.match('<TotalEvents>(\d*)</TotalEvents>', line)
-            if match is not None:
-                nEvents = float(match.group(1))
-                continue
-            match = re.match('(\d*) events were ran', line)
-            if match is not None:
-                nEvents = float(match.group(1))
-                continue
-            match = re.match('    <Metric Name="Timing-tstoragefile-write-totalMegabytes" Value="(\d*\.\d*)"/>',
-                             line)
-            if match is not None:
-                totalSize = float(match.group(1))
-                continue
-            match = re.match('total (\d*)K', line)
-            if match is not None:
-                totalSize = float(match.group(1))
-                continue
-            if 'Before matching' in line: 
-                XsBeforeMatch=float(line.split('=')[-1].split('+-')[0])
-                print "Cross section Before Matching:", XsBeforeMatch
-            if 'After matching' in line: 
-                XsAfterMatch=float(line.split('=')[-1].split('+-')[0])
-                print "Cross section After Matching: ", XsAfterMatch
-            if "Filter efficiency" in line and "[TO BE USED IN MCM]" in line:
-                match = re_filtereff.search(line)
-                filterEff = match.group("n1")
-                filterEffErr = match.group("n2")
-            if XsAfterMatch!=0 and XsBeforeMatch!=0: matchEff=XsAfterMatch/XsBeforeMatch
-            timePerEvent1=0; timePerEvent2=0; timePerEvent3=0; timePerEvent4=0;
-            match = re.match('    <Metric Name="AvgEventCPU" Value="(\d*\.\d*)"/>',
-                             line)
-            if match is not None:
-                timePerEvent1 = float(match.group(1))
+            match_totalevents = re_totalevents.search(line)
+            if match_totalevents is not None:
+                nEventsCandidates.append(float(match_totalevents.group(1)))
                 continue
 
-            match = re.match('    <Metric Name="TotalJobCPU" Value="(\d*\.\d*)"/>',
-                             line)
-            if match is not None:
-                timePerEvent2 = float(match.group(1))
+            match_totalevents2 = re_totalevents2.search(line)
+            if match_totalevents2 is not None:
+                nEventsCandidates.append(float(match_totalevents2.group(1)))
                 continue
 
-            match = re.match('    <Metric Name="AvgEventTime" Value="(\d*\.\d*)"/>',
-                             line)
-            if match is not None:
-                timePerEvent3 = float(match.group(1))
+            match_totalsize = re_totalsize.search(line)
+            if match_totalsize is not None:
+                totalSize = float(match_totalsize.group(1))
                 continue
 
-            match = re.match('    <Metric Name="TotalJobTime" Value="(\d*\.\d*)"/>',
-                             line)
-            if match is not None:
-                timePerEvent4 = float(match.group(1))
-                timePerEvent=max(timePerEvent1,timePerEvent2,timePerEvent3,timePerEvent4)/nEvents
-                print "Found timePerEvent=max({}, {}, {}, {})/{} = {}".format(timePerEvent1, timePerEvent2, timePerEvent3, timePerEvent4, nEvents, timePerEvent)
-                if not iswmLHE:
-                    matchEff=1.0
-                    continue
-                else:
-                    break
+            match_totalsize2 = re_totalsize2.search(line)
+            if match_totalsize2 is not None:
+                totalSize = float(match_totalsize2.group(1))
+                continue
 
+            match_matcheff = re_matcheff.search(line)
+            if match_matcheff is not None:
+                matchEff = float(match_matcheff.group("n1"))
+                matchEffErr = float(match_matcheff.group("n2"))
+                if not iswmLHE and matchEff != 1.:
+                    raise ValueError("Found matching efficiency of {} for a GS job, which is not supposed to have matching! Something is wrong.")
+                continue
+
+            match_filtereff = re_filtereff.search(line)
+            if match_filtereff is not None:
+                filterEff = float(match_filtereff.group("n1"))
+                filterEffErr = float(match_filtereff.group("n2"))
+                continue
+
+            match_jobTime = re_jobTime.search(line)
+            if match_jobTime is not None:
+                jobTimeCandidates.append(float(match_jobTime.group(1)))
+                continue
+
+            match_avgEventTime = re_avgEventTime.search(line)
+            if match_avgEventTime is not None:
+                avgEventTimeCandidates.append(float(match_avgEventTime.group(1)))
+
+    if len(nEventsCandidates) == 0:
+        raise ValueError("Didn't find number of events from log files!")
+    # If more than one nEvents field is found, use the maximum. Sometimes, the number of filtered events gets picked up here.
+    nEvents = max([int(x) for x in nEventsCandidates])
+
+    # Size / event calculation
     if nEvents != 0:
-        sizePerEvent = totalSize*1024.0/nEvents
+        sizePerEvent = totalSize * 1024.0 / nEvents
     else:
         sizePerEvent = -1
-    print "Found (time, size, matchEff)=({}, {}, {}) in file {}:".format(timePerEvent, sizePerEvent, matchEff, stdoutFile)
-    return timePerEvent, sizePerEvent, matchEff, filterEff, filterEffErr
+
+    timePerEventCandidates = []
+    for jobTime in jobTimeCandidates:
+        timePerEventCandidates.append(jobTime / nEvents)
+    for avgEventTime in avgEventTimeCandidates:
+        timePerEventCandidates.append(avgEventTime)
+    timePerEvent = max(timePerEventCandidates)
+
+    print "Results from file(s) {}:".format(", ".join(filesToParse))
+    print "\tTime/event = {}".format(timePerEvent)
+    print "\tSize/event = {}".format(sizePerEvent)
+    print "\tMatching efficiency = {} +/- {}".format(matchEff, matchEffErr)
+    print "\tFilter efficiency = {} +/- {}".format(filterEff, filterEffErr)
+    if filterEffErr / filterEff > 0.1:
+        print "WARNING: Filter efficiency error {:.3f} > 10%! Consider running more events.".format(filterEffErr / filterEff)
+    return timePerEvent, sizePerEvent, matchEff, matchEffErr, filterEff, filterEffErr
 
 def getTimeSize(requests, use_bsub=False, force_update=False):
     number_complete = 0
@@ -543,17 +557,17 @@ def getTimeSize(requests, use_bsub=False, force_update=False):
                 searched = re.search('wmLHE', req.getPrepId())
                 if searched is not None:
                     iswmLHE = True
-                timePerEvent, sizePerEvent, matchEff, filterEff, filterEffErr = getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=use_bsub, stderrFile=stderrFile)
+                timePerEvent, sizePerEvent, matchEff, matchEffErr, filterEff, filterEffErr = getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=use_bsub, stderrFile=stderrFile)
 
                 if timePerEvent == 0:
                     print "[getTimeSize] WARNING : timePerEvent=0 for request {}. Try resubmitting.".format(req.getPrepId())
-                    print "testRequests.py -n 20 -i {}".format(req.getPrepId())
 
                 req.setTime(timePerEvent)
                 req.setSize(sizePerEvent)
                 req.setMatchEff(matchEff)
+                req.setMatchEffErr(matchEffErr)
                 if filterEff != 1:
-                    req.setFilterEff(filterEff)
+                    req.setFiltEff(filterEff)
                     req.setFiltEffErr(filterEffErr)
         else:
             number_complete += 1
