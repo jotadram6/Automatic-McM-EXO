@@ -25,17 +25,27 @@ sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
 from rest import * # Load class to access McM
 from requestClass import * # Load class to store request information
 
+# Regexes
+re_filtereff = re.compile("Filter efficiency.*=.*= (?P<n1>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) \+- (?P<n2>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?).*\[TO BE USED IN MCM\]")
+re_matcheff = re.compile("Matching efficiency = (?P<n1>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) \+/- (?P<n2>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?).*\[TO BE USED IN MCM\]")
+re_totalevents = re.compile("<TotalEvents>(\d*)</TotalEvents>")
+re_totalevents2 = re.compile('(\d*) events were ran')
+re_totalsize = re.compile('<Metric Name="Timing-tstoragefile-write-totalMegabytes" Value="(\d*\.\d*)"/>')
+re_totalsize2 = re.compile("total (\d*)K")
+re_jobTime = re.compile('<Metric Name="(?:TotalJobCPU|TotalJobTime)" Value="(\d*\.\d*)"/>')
+re_avgEventTime = re.compile('<Metric Name="(?:AvgEventCPU|AvgEventTime)" Value="(\d*\.\d*)"/>')
+
 def getArguments():
     parser = argparse.ArgumentParser(description='Test McM requests.')
 
     # Command line flags
     parser.add_argument('-i', '--ids', dest='ids', help=
                         'List of PrepIDs to be tested. Separate range by >.')
-    parser.add_argument('-f', '--file', dest='csv', help='Input CSV file.')
-    parser.add_argument('-o', '--output', dest='output', default='test_{}.csv'.format(int(time.time())),
-                        help='Output CSV file')
+    parser.add_argument('-f', '--extract', action='store_true', help='Extract test results')
     parser.add_argument('-b', '--bsub', dest='bsub', action='store_true', help='Use bsub instead of condor')
     parser.add_argument('-n', dest='nEvents', help='Number of events to test.')
+    parser.add_argument('-d', '--dev', action='store_true', help='Use dev instance of MCM')
+    parser.add_argument('-D', '--test_dir', type=str, default='test', help='Test directory')
 
     args_ = parser.parse_args()
     return args_
@@ -82,26 +92,28 @@ def parseIDList(compactList):
             sys.exit(3)
     return requests
 
-def getTestScript(PrepID, nEvents, use_bsub=False):
+def getTestScript(PrepID, nEvents, use_bsub=False, use_dev=False):
     request_type = "requests"
     if "chain_" in PrepID:
         request_type = "chained_requests"
 
     get_test = ""
-    if use_bsub:
-        scriptFile = "{}.sh".format(PrepID)
+    scriptFile = "{}.sh".format(PrepID)
+
+    if use_dev:
+        dev_string = "-dev"
     else:
-        scriptFile = "test_{}/{}.sh".format(PrepID, PrepID)
+        dev_string = ""
+
     if nEvents is None:
         get_test =  "curl -s --insecure \
-https://cms-pdmv.cern.ch/mcm/public/restapi/{0}/get_test/{1} -o {2}".format(
-            request_type, PrepID, scriptFile)
+https://cms-pdmv{}.cern.ch/mcm/public/restapi/{}/get_test/{} -o {}".format(
+            dev_string, request_type, PrepID, scriptFile)
     else:
         # add "/N" to end of URL to get N events
-        os.system("mkdir -pv test_{}".format(PrepID))
         get_test =  "curl -s --insecure \
-https://cms-pdmv.cern.ch/mcm/public/restapi/{0}/get_test/{1}/{2} -o {3}".format(
-            request_type, PrepID, nEvents, scriptFile)
+https://cms-pdmv{}.cern.ch/mcm/public/restapi/{}/get_test/{}/{} -o {}".format(
+            dev_string, request_type, PrepID, nEvents, scriptFile)
     print get_test
     subprocess.call(get_test, shell=True)
 
@@ -133,46 +145,91 @@ def submitToBatch(PrepId):
     jobID = match.group(1)
     return jobID
 
-def submitToCondor(PrepId):
-    batch_command = "csub {}.sh -t workday -d test_{} --os SLCern6".format(PrepId, PrepId)
+#def submitToCondor(PrepId, retry=0):
+#    batch_command = "csub {}.sh -t workday -d test_{} --os SLCern6".format(PrepId, PrepId)
+#    print batch_command
+#    output = subprocess.Popen(batch_command, stdout=subprocess.PIPE,
+#                              shell=True).communicate()[0]
+#    print output
+#    match = re.search('submitted to cluster (\d*)', output)
+#    if not match:
+#        print "[submitToCondor] ERROR : Couldn't find string 'submitted to cluster' in output line."
+#        if retry > 3:
+#            return -1
+#        else:
+#            return submitToCondor(PrepId, retry+1)
+#    jobID = match.group(1)
+#    return jobID
+
+def submitManyToCondor(reqs, retry=0):
+    scripts = ["{}.sh".format(req.getPrepId()) for req in reqs]
+    with open("test_many.sh", "w") as f:
+        f.write("#!/bin/bash\n")
+        f.write("scripts=(" + " ".join(scripts) + ")\n")
+        f.write("source ${scripts[$1]}\n")
+    batch_command = "csub test_many.sh -t workday --os SLCern6 --queue_n {} -F {}".format(len(scripts), ",".join(scripts))
     print batch_command
-    output = subprocess.Popen(batch_command, stdout=subprocess.PIPE,
-                              shell=True).communicate()[0]
+    output = subprocess.Popen(batch_command, stdout=subprocess.PIPE, shell=True).communicate()[0]
     print output
     match = re.search('submitted to cluster (\d*)', output)
     if not match:
         print "[submitToCondor] ERROR : Couldn't find string 'submitted to cluster' in output line."
-        sys.exit(1)
+        if retry > 3:
+            return -1
+        else:
+            return submitManyToCondor(reqs, retry=retry+1, test_dir=test_dir)
     jobID = match.group(1)
-    return jobID
+    prepid_jobid_map = {}
+    for i, req in enumerate(reqs):
+        prepid_jobid_map[req.getPrepId()] = "{}.{}".format(jobID, i)
+    return prepid_jobid_map
 
-def createTest(compactPrepIDList, outputFile, nEvents, use_bsub=False):
+
+def createTest(compactPrepIDList, nEvents, use_bsub=False, use_dev=False, test_dir="test"):
+    if os.path.isdir(test_dir):
+        raise ValueError("Test directory {} already exists.".format(test_dir))
+
+    cwd = os.getcwd()
+    os.system("mkdir -pv {}".format(test_dir))
+    os.chdir(test_dir)
+
     requests = parseIDList(compactPrepIDList)
 
-    csvfile = csv.writer(open(outputFile, 'w'))
-    csvfile.writerow(['PrepId', 'JobId', 'Time per event [s]',
-                      'Size per event [kB]'])
+    csvfile = csv.writer(open("testjobs.csv", 'w'))
+    csvfile.writerow(['PrepId', 'JobId'])
 
     print "Testing {0} requests".format(len(requests))
     #if not use_bsub:
     #    os.system("csub_tar --cmssw")
+    failed = []
     for req in requests:
-        getTestScript(req.getPrepId(), nEvents)
-        if use_bsub:
+        getTestScript(req.getPrepId(), nEvents, use_dev=use_dev)
+
+    prepid_jobid_map = {}
+    if use_bsub:
+        for req in requests:
             jobID = submitToBatch(req.getPrepId())
-        else:
-            jobID = submitToCondor(req.getPrepId())
-        req.setJobID(jobID)
+            prepid_jobid_map[req.getPrepId()] = jobID
+    else:
+        prepid_jobid_map = submitManyToCondor(requests)
+        if prepid_jobid_map == -1:
+            print "[createTest] ERROR : Condor submission failed!"
+            sys.exit(1)
+
+    for req in requests:
+        req.setJobID(prepid_jobid_map[req.getPrepId()])
         searched = re.search('chain_', req.getPrepId())
         if searched is None:
             csvfile.writerow([req.getPrepId(), req.getJobID(), "", ""])
         else:
-            mcm = McM(dev=False) # Get McM connection
+            mcm = McM(dev=use_dev) # Get McM connection
             mcm_req = mcm.get('chained_requests', req.getPrepId())
             wmLHEPrepId = mcm_req['chain'][0]
             GSPrepId = mcm_req['chain'][1]
             csvfile.writerow([wmLHEPrepId, req.getJobID(), "", ""])
             csvfile.writerow([GSPrepId, req.getJobID(), "", ""])
+
+    os.chdir(cwd)
     return
 
 def exitDuplicateField(file_in_,field_):
@@ -384,78 +441,91 @@ def rewriteCSVFile(csvfile, requests):
 
 def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
     totalSize = 0
-    timePerEvent = 0
-    nEvents = 0
+    jobTimeCandidates = []
+    avgEventTimeCandidates = []
+    nEventsCandidates = []
     XsBeforeMatch = 0
     XsAfterMatch = 0
-    matchEff = 0
+    matchEff = 1.0
+    matchEffErr = 0.0
+    filterEff = 1.0
+    filterEffErr = 0.0
+
     filesToParse = [stdoutFile]
     if stderrFile:
         filesToParse.append(stderrFile)
     for fileToParse in filesToParse:
         fileContents = open(fileToParse, 'r')
         for line in fileContents:
-            match = re.match('<TotalEvents>(\d*)</TotalEvents>', line)
-            if match is not None:
-                nEvents = float(match.group(1))
-                continue
-            match = re.match('(\d*) events were ran', line)
-            if match is not None:
-                nEvents = float(match.group(1))
-                continue
-            match = re.match('    <Metric Name="Timing-tstoragefile-write-totalMegabytes" Value="(\d*\.\d*)"/>',
-                             line)
-            if match is not None:
-                totalSize = float(match.group(1))
-                continue
-            match = re.match('total (\d*)K', line)
-            if match is not None:
-                totalSize = float(match.group(1))
-                continue
-            if 'Before matching' in line: 
-                XsBeforeMatch=float(line.split('=')[-1].split('+-')[0])
-                print "Cross section Before Matching:", XsBeforeMatch
-            if 'After matching' in line: 
-                XsAfterMatch=float(line.split('=')[-1].split('+-')[0])
-                print "Cross section After Matching: ", XsAfterMatch
-            if XsAfterMatch!=0 and XsBeforeMatch!=0: matchEff=XsAfterMatch/XsBeforeMatch
-            timePerEvent1=0; timePerEvent2=0; timePerEvent3=0; timePerEvent4=0;
-            match = re.match('    <Metric Name="AvgEventCPU" Value="(\d*\.\d*)"/>',
-                             line)
-            if match is not None:
-                timePerEvent1 = float(match.group(1))
+            match_totalevents = re_totalevents.search(line)
+            if match_totalevents is not None:
+                nEventsCandidates.append(float(match_totalevents.group(1)))
                 continue
 
-            match = re.match('    <Metric Name="TotalJobCPU" Value="(\d*\.\d*)"/>',
-                             line)
-            if match is not None:
-                timePerEvent2 = float(match.group(1))
+            match_totalevents2 = re_totalevents2.search(line)
+            if match_totalevents2 is not None:
+                nEventsCandidates.append(float(match_totalevents2.group(1)))
                 continue
 
-            match = re.match('    <Metric Name="AvgEventTime" Value="(\d*\.\d*)"/>',
-                             line)
-            if match is not None:
-                timePerEvent3 = float(match.group(1))
+            match_totalsize = re_totalsize.search(line)
+            if match_totalsize is not None:
+                totalSize = float(match_totalsize.group(1))
                 continue
 
-            match = re.match('    <Metric Name="TotalJobTime" Value="(\d*\.\d*)"/>',
-                             line)
-            if match is not None:
-                timePerEvent4 = float(match.group(1))
-                timePerEvent=max(timePerEvent1,timePerEvent2,timePerEvent3,timePerEvent4)/nEvents
-                print "Found timePerEvent=max({}, {}, {}, {})/{} = {}".format(timePerEvent1, timePerEvent2, timePerEvent3, timePerEvent4, nEvents, timePerEvent)
-                if not iswmLHE:
-                    matchEff=1.0
-                    continue
-                else:
-                    break
+            match_totalsize2 = re_totalsize2.search(line)
+            if match_totalsize2 is not None:
+                totalSize = float(match_totalsize2.group(1))
+                continue
 
+            match_matcheff = re_matcheff.search(line)
+            if match_matcheff is not None:
+                matchEff = float(match_matcheff.group("n1"))
+                matchEffErr = float(match_matcheff.group("n2"))
+                if not iswmLHE and matchEff != 1.:
+                    raise ValueError("Found matching efficiency of {} for a GS job, which is not supposed to have matching! Something is wrong.")
+                continue
+
+            match_filtereff = re_filtereff.search(line)
+            if match_filtereff is not None:
+                filterEff = float(match_filtereff.group("n1"))
+                filterEffErr = float(match_filtereff.group("n2"))
+                continue
+
+            match_jobTime = re_jobTime.search(line)
+            if match_jobTime is not None:
+                jobTimeCandidates.append(float(match_jobTime.group(1)))
+                continue
+
+            match_avgEventTime = re_avgEventTime.search(line)
+            if match_avgEventTime is not None:
+                avgEventTimeCandidates.append(float(match_avgEventTime.group(1)))
+
+    if len(nEventsCandidates) == 0:
+        raise ValueError("Didn't find number of events from log files!")
+    # If more than one nEvents field is found, use the maximum. Sometimes, the number of filtered events gets picked up here.
+    nEvents = max([int(x) for x in nEventsCandidates])
+
+    # Size / event calculation
     if nEvents != 0:
-        sizePerEvent = totalSize*1024.0/nEvents
+        sizePerEvent = totalSize * 1024.0 / nEvents
     else:
         sizePerEvent = -1
-    print "Found (time, size, matchEff)=({}, {}, {}) in file {}:".format(timePerEvent, sizePerEvent, matchEff, stdoutFile)
-    return timePerEvent, sizePerEvent, matchEff
+
+    timePerEventCandidates = []
+    for jobTime in jobTimeCandidates:
+        timePerEventCandidates.append(jobTime / nEvents)
+    for avgEventTime in avgEventTimeCandidates:
+        timePerEventCandidates.append(avgEventTime)
+    timePerEvent = max(timePerEventCandidates)
+
+    print "Results from file(s) {}:".format(", ".join(filesToParse))
+    print "\tTime/event = {}".format(timePerEvent)
+    print "\tSize/event = {}".format(sizePerEvent)
+    print "\tMatching efficiency = {} +/- {}".format(matchEff, matchEffErr)
+    print "\tFilter efficiency = {} +/- {}".format(filterEff, filterEffErr)
+    if filterEffErr / filterEff > 0.1:
+        print "WARNING: Filter efficiency error {:.3f} > 10%! Consider running more events.".format(filterEffErr / filterEff)
+    return timePerEvent, sizePerEvent, matchEff, matchEffErr, filterEff, filterEffErr
 
 def getTimeSize(requests, use_bsub=False, force_update=False):
     number_complete = 0
@@ -465,15 +535,16 @@ def getTimeSize(requests, use_bsub=False, force_update=False):
                 stdoutFile = "LSFJOB_{0}/STDOUT".format(req.getJobID())
                 stderrFile = None
             else:
-                stdoutCandidates = glob.glob("test_{}/*{}*.stdout".format(req.getPrepId(), req.getJobID()))
+                stdoutCandidates = glob.glob("{}/*{}*.stdout".format(os.getcwd(), req.getJobID()))
                 if len(stdoutCandidates) == 0:
                     print "[getTimeSize] WARNING : Didn't find output file for request {}".format(req.getJobID())
+                    sys.exit(1)
                 elif len(stdoutCandidates) >= 1:
                     # Multiple attempts: use latest
                     stdoutCandidates.sort(key=lambda x: os.path.getmtime(x), reverse=True)
                 stdoutFile = stdoutCandidates[0]
 
-                stderrCandidates = glob.glob("test_{}/*{}*.stderr".format(req.getPrepId(), req.getJobID()))
+                stderrCandidates = glob.glob("{}/*{}*.stderr".format(os.getcwd(), req.getJobID()))
                 if len(stderrCandidates) == 0:
                     print "[getTimeSize] WARNING : Didn't find output stderr file for request {}".format(req.getJobID())
                 elif len(stderrCandidates) >= 1:
@@ -486,15 +557,18 @@ def getTimeSize(requests, use_bsub=False, force_update=False):
                 searched = re.search('wmLHE', req.getPrepId())
                 if searched is not None:
                     iswmLHE = True
-                timePerEvent, sizePerEvent, matchEff = getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=use_bsub, stderrFile=stderrFile)
+                timePerEvent, sizePerEvent, matchEff, matchEffErr, filterEff, filterEffErr = getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=use_bsub, stderrFile=stderrFile)
 
                 if timePerEvent == 0:
                     print "[getTimeSize] WARNING : timePerEvent=0 for request {}. Try resubmitting.".format(req.getPrepId())
-                    print "testRequests.py -n 20 -i {}".format(req.getPrepId())
 
                 req.setTime(timePerEvent)
                 req.setSize(sizePerEvent)
                 req.setMatchEff(matchEff)
+                req.setMatchEffErr(matchEffErr)
+                if filterEff != 1:
+                    req.setFiltEff(filterEff)
+                    req.setFiltEffErr(filterEffErr)
         else:
             number_complete += 1
 
@@ -505,29 +579,31 @@ def getTimeSize(requests, use_bsub=False, force_update=False):
             number_complete, len(requests), len(requests) - number_complete)
     return
 
-def extractTest(inputCsvFilePath, force_update=False, use_bsub=False):
-    inputCsvFile = open(inputCsvFilePath, 'r') # Open CSV file
+def extractTest(test_dir, force_update=False, use_bsub=False):
+    cwd = os.getcwd()
+    os.chdir(test_dir)
+    inputCsvFile = open("testjobs.csv", 'r') # Open CSV file
     fields = getFields(inputCsvFile)  # Get list of field indices
     # Fill list of request objects from CSV file and get number of requests
     requests, num_requests = fillFields(inputCsvFile, fields)
     inputCsvFile.close()
-
     getTimeSize(requests, force_update=force_update, use_bsub=use_bsub)
 
-    outputCsvFile = open("results_{}".format(inputCsvFilePath), 'w')
+    outputCsvFile = open("testresults.csv", 'w')
     rewriteCSVFile(outputCsvFile, requests)
 
+    os.chdir(cwd)
     return
 
 def main():
     args = getArguments() # Setup flags and get arguments
-    if args.ids and args.csv:
+    if args.ids and args.extract:
         print "Error: Cannot use both -i and -f."
         sys.exit(1)
     elif args.ids:
-        createTest(args.ids, args.output, args.nEvents, use_bsub=args.bsub)
-    elif args.csv:
-        extractTest(args.csv, use_bsub=args.bsub)
+        createTest(args.ids, args.nEvents, use_bsub=args.bsub, use_dev=args.dev, test_dir=args.test_dir)
+    elif args.extract:
+        extractTest(args.test_dir, use_bsub=args.bsub)
     else:
         print "Error: Must use either -i or -f."
         sys.exit(2)

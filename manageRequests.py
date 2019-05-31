@@ -88,120 +88,49 @@ def exitDuplicateField(file_in_, field_):
     sys.exit(3)
 
 def getFields(csvfile_, file_in_):
-    # List of indices for each field in CSV file
-    list = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-             -1, -1, -1, -1, -1, -1, -1]
+    field_indices = {}
+    field_candidates = ['name', 'dataset', 'mcdbid', 'cross section', 'events', 'fragment', 'time per event', 'size per event', 'tag', 'generator', 'campaign', 'sequences customize', 'gridpack', 'gridpack cards url', 'mcm tag', 'filter efficiency', "filter efficiency err", "match efficiency", "match efficiency err", "pwg", 'campaign', 'prepid', 'sequences customize', 'process string', 'notes', 'sequences beamspot', 'sequences magfield', 'jobid']
+
+    synonym_list = {
+        "dataset":["dataset name", "dataset"],
+        "mcdbid":["eos", "mcdbid"],
+        "cross section":['cross section [pb]', 'cross section (pb)', 'cross section', 'cs', 'cs [pb]', 'cs (pb)', 'xsec', 'xsec [pb]', 'xsec (pb)'],
+        "events":['total events', 'events', 'number of events'],
+        "fragment":['fragment name', 'generator fragment name', 'fragment'],
+        "time per event":['time per event [s]', 'time per event', 'time per event (s)', 'time', 'time [s]', 'time (s)'],
+        "size per event":['size per event [kb]', 'size per event', 'size per event (kb)', 'size', 'size [kb]', 'size (kb)'],
+        "tag":['tag', 'fragment tag', 'sha', 'sha-1'],
+        "generator":['generator', 'generators'],
+        "campaign":['campaign', 'member of campaign'],
+        "sequences customize":['sequences customise', 'sequences customize'],
+        "gridpack":['gridpack location', 'gridpack'],
+        "gridpack cards url":['gridpack cards url', 'cards url', 'gridpack cards location', 'cards location'],
+        "mcm tag":['mcm tag', 'mcm tags'],
+        "match efficiency":["match efficiency", "matching efficiency", "match eff", "matching eff"],
+        "match efficiency err":["match efficiency err", "matching efficiency err", "match eff eff", "matching eff eff"],
+    }
+
+    # Process header row
     header = csv.reader(csvfile_).next()
     for ind, field in enumerate(header):
         field = field.lower()
-        if field in ['dataset name', 'dataset']:
-            #ensure no duplicate fields
-            if list[0] > -1:
-                exitDuplicateField(file_in_, "Dataset name")
-            list[0] = ind
-        elif field in ['eos', 'mcdbid']:
-            if list[1] > -1:
-                exitDuplicateField(file_in_, "EOS")
-            list[1] = ind
-        elif field in ['cross section [pb]', 'cross section (pb)',
-                       'cross section', 'cs', 'cs [pb]', 'cs (pb)', 'xsec',
-                       'xsec [pb]', 'xsec (pb)']:
-            if list[2] > -1:
-                exitDuplicateField(file_in_, "Cross section [pb]")
-            list[2] = ind
-        elif field in ['total events', 'events', 'number of events']:
-            if list[3] > -1:
-                exitDuplicateField(file_in_, "Total events")
-            list[3] = ind
-        elif field in ['fragment name', 'generator fragment name', 'fragment']:
-            if list[4] > -1:
-                exitDuplicateField(file_in_, "Fragment name")
-            list[4] = ind
-        elif field in ['time per event [s]', 'time per event',
-                       'time per event (s)', 'time', 'time [s]', 'time (s)']:
-            if list[5] > -1:
-                exitDuplicateField(file_in_, "Time per event [s]")
-            list[5] = ind
-        elif field in ['size per event [kb]', 'size per event',
-                       'size per event (kb)', 'size', 'size [kb]', 'size (kb)']:
-            if list[6] > -1:
-                exitDuplicateField(file_in_, "Size per event [kB]")
-            list[6] = ind
-        elif field in ['tag', 'fragment tag', 'sha', 'sha-1']:
-            if list[7] > -1:
-                exitDuplicateField(file_in_, "Fragment tag")
-            list[7] = ind
-        elif field in ['generator', 'generators']:
-            if list[8] > -1:
-                exitDuplicateField(file_in_, "Generator")
-            list[8] = ind
-        elif field in ['filter efficiency']:
-            if list[9] > -1:
-                exitDuplicateField(file_in_, "Filter efficiency")
-            list[9] = ind
-        elif field in ['filter efficiency error']:
-            if list[10] > -1:
-                exitDuplicateField(file_in_, "Filter efficiency error")
-            list[10] = ind
-        elif field in ['match efficiency']:
-            if list[11] > -1:
-                exitDuplicateField(file_in_, "Match efficiency")
-            list[11] = ind
-        elif field in ['match efficiency error']:
-            if list[12] > -1:
-                exitDuplicateField(file_in_, "Match efficiency error")
-            list[12] = ind
-        elif field in ['pwg']:
-            if list[13] > -1: exitDuplicateField(file_in_, "PWG")
-            list[13] = ind
-        elif field in ['campaign', 'member of campaign']:
-            if list[14] > -1:
-                exitDuplicateField(file_in_, "Member of campaign")
-            list[14] = ind
-        elif field in ['prepid']:
-            if list[15] > -1:
-                exitDuplicateField(file_in_, "PrepID")
-            list[15] = ind
-        elif field in ['sequences customise', 'sequences customize']:
-            if list[16] > -1:
-                exitDuplicateField(file_in_, "Sequences customise")
-            list[16] = ind
-        elif field in ['process string']:
-            if list[17] > -1:
-                exitDuplicateField(file_in_, "Process string")
-            list[17] = ind
-        elif field in ['gridpack location', 'gridpack']:
-            if list[18] > -1:
-                exitDuplicateField(file_in_, "Gridpack location")
-            list[18] = ind
-        elif field in ['gridpack cards url', 'cards url',
-                       'gridpack cards location', 'cards location']:
-            if list[19] > -1:
-                exitDuplicateField(file_in_, "Gridpack cards URL")
-            list[19] = ind
-        elif field in ['notes']:
-            if list[20] > -1:
-                exitDuplicateField(file_in_, "Notes")
-            list[20] = ind
-        elif field in ['mcm tag', 'mcm tags']:
-            if list[21] > -1:
-                exitDuplicateField(file_in_, "McM tags")
-            list[21] = ind
-        elif field in ['sequences beamspot']:
-            if list[22] > -1:
-                exitDuplicateField(file_in_, "Sequences beamspot")
-            list[22] = ind
-        elif field in ['sequences magfield']:
-            if list[23] > -1:
-                exitDuplicateField(file_in_, "Sequences magField")
-            list[23] = ind
-        elif field in ['jobid', 'local gridpack location', 'local lhe', 'lhe']:
-            continue
-        else:
-            print "Error: The field {0} is not valid.".format(field)
-            sys.exit(4)
 
-    return list
+        # Check for synonyms
+        for field_rename, field_synonyms in synonym_list.iteritems():
+            if field in field_synonyms:
+                field = field_rename
+
+        # Field is in the whitelist?
+        if not field in field_candidates:
+            raise ValueError("Unknown header field: {} in header {}".format(field, header))
+
+        # Duplicate?
+        if field in field_indices:
+            raise ValueError("Duplicate header field: {} in header {}".format(field, header))
+
+        field_indices[field] = ind
+
+    return field_indices
 
 def formatFragment(file_, campaign_):
     if len(file_.split("/")) > 2:
@@ -260,7 +189,7 @@ externalLHEProducer = cms.EDProducer("ExternalLHEProducer",
 # {0}
 """.format(cards)
 
-    if fragment != "" and tag != "":
+    if fragment != "":
         #gen_fragment_url = "https://raw.githubusercontent.com/cms-sw/genproductions/{0}/{1}".format(
         #    tag, fragment.split("Configuration/GenProduction/")[1])
         gen_fragment_url = fragment
@@ -282,37 +211,47 @@ def fillFields(csvfile, fields, campaign, PWG, notCreate_, McMTags):
     requests = [] # List containing request objects
     num_requests = 0
 
+    # Required fields
+    #required_fields = ["fragment", "dataset", "events"]
+    #for required_field in required_fields:
+    #    if not required_field in fields:
+    #        raise ValueError("Missing required field {}. Please make sure it's in the header.".format(required_field))
+
     for row in csv.reader(csvfile):
-        if "http" in row[fields[4]]:
-            time.sleep(1)
-            print num_requests % 15
-            if num_requests % 15 == 14:
-                print "[fillFields] INFO : Sleeping to avoid HTTP Error 429: Too Many Requests"
-                time.sleep(20)
+        if "fragment" in fields:
+            if "http" in row[fields["fragment"]]:
+                time.sleep(1)
+                print num_requests % 15
+                if num_requests % 15 == 14:
+                    print "[fillFields] INFO : Sleeping to avoid HTTP Error 429: Too Many Requests"
+                    time.sleep(20)
         if row[0].startswith("#"):
             continue
         num_requests += 1
         tmpReq = Request()
-        if fields[0] > -1:
-            tmpReq.setDataSetName(row[fields[0]])
-        if fields[1] > -1:
-            tmpReq.setMCDBID(row[fields[1]])
+        if "dataset" in fields:
+            tmpReq.setDataSetName(row[fields["dataset"]])
+
+        if "mcdbid" in fields:
+            tmpReq.setMCDBID(row[fields["mcdbid"]])
         elif not notCreate_:
             tmpReq.setMCDBID(-1)
-        if fields[2] > -1:
-            tmpReq.setCS(row[fields[2]])
+        if "cross section" in fields:
+            tmpReq.setCS(row[fields["cross section"]])
         elif not notCreate_:
             tmpReq.setCS(1.0)
-        if fields[3] > -1:
-            tmpReq.setEvts(row[fields[3]])
-        if fields[14] > -1:
-            campaign = row[fields[14]]
+
+        if "events" in fields:
+            tmpReq.setEvts(row[fields["events"]])
+        if "campaign" in fields:
+            campaign = row[fields["campaign"]]
             tmpReq.setCamp(campaign)
         elif campaign is not None:
             tmpReq.setCamp(campaign)
-        if fields[4] > -1:
+
+        if "fragment" in fields:
             #tmpReq.setFrag(formatFragment(row[fields[4]],campaign))
-            fragment = fetchFragment(row[fields[4]])
+            fragment = fetchFragment(row[fields["fragment"]])
             if fragment:
                 tmpReq.setMcMFrag(fragment)
             else:
@@ -320,62 +259,78 @@ def fillFields(csvfile, fields, campaign, PWG, notCreate_, McMTags):
                 sys.exit(1)
             #tmpReq.setMcMFrag(createLHEProducer(row[fields[18]], "", row[fields[4]], "1"))
             #tmpReq.setFrag(formatFragment(row[fields[4]],campaign))
-        if fields[5] > -1:
-            tmpReq.setTime(row[fields[5]])
-        if fields[6] > -1:
-            tmpReq.setSize(row[fields[6]])
-        if fields[7] > -1:
-            tmpReq.setTag(row[fields[7]])
-        if fields[8] > -1:
-            tmpReq.setGen(row[fields[8]].split(" ")) # Multiple generators separated by spaces
-        if fields[9] > -1:
-            tmpReq.setFiltEff(row[fields[9]])
+
+        if "time per event" in fields:
+            tmpReq.setTime(row[fields["time per event"]])
+
+        if "size per event" in fields:
+            tmpReq.setSize(row[fields["size per event"]])
+
+        if "tag" in fields:
+            tmpReq.setTag(row[fields["tag"]])
+
+        if "generator" in fields:
+            tmpReq.setGen(row[fields["generator"]].split(" ")) # Multiple generators separated by spaces
+
+        if "filter efficiency" in fields:
+            tmpReq.setFiltEff(row[fields["filter efficiency"]])
         elif not notCreate_:
             tmpReq.setFiltEff(1.0)
-        if fields[10] > -1:
-            tmpReq.setFiltEffErr(row[fields[10]])
+
+        if "filter efficiency err" in fields:
+            tmpReq.setFiltEffErr(row[fields["filter efficiency err"]])
         elif not notCreate_:
             tmpReq.setFiltEffErr(0.0)
-        if fields[11] > -1:
-            tmpReq.setMatchEff(row[fields[11]])
+
+        if "match efficiency" in fields:
+            tmpReq.setMatchEff(row[fields["match efficiency"]])
         elif not notCreate_:
             tmpReq.setMatchEff(1.0)
-        if fields[12] > -1:
-            tmpReq.setMatchEffErr(row[fields[12]])
+
+        if "match efficiency err" in fields:
+            tmpReq.setMatchEffErr(row[fields["match efficiency err"]])
         elif not notCreate_:
             tmpReq.setMatchEffErr(0.0)
-        if fields[13] > -1:
-            tmpReq.setPWG(row[fields[13]])
+
+        if "pwg" in fields:
+            tmpReq.setPWG(row[fields["pwg"]])
         elif not notCreate_:
             tmpReq.setPWG(PWG)
-        if fields[15] > -1:
-            tmpReq.setPrepId(row[fields[15]])
-        if fields[16] > -1:
-            tmpReq.setSequencesCustomise(row[fields[16]])
-        if fields[17] > -1:
-            tmpReq.setProcessString(row[fields[17]])
-        if fields[18] > -1:
-            if fields[19] > -1:
-                if fields[4] > -1 and fields[7]:
-                    tmpReq.setMcMFrag(createLHEProducer(row[fields[18]],
-                                                        row[fields[19]],
-                                                        row[fields[4]],
-                                                        #formatFragment(row[fields[4]], campaign),
-                                                        row[fields[7]]))
-                else:
-                    tmpReq.setMcMFrag(createLHEProducer(row[fields[18]],
-                                                        row[fields[19]], "", ""))
+
+        if "prepid" in fields:
+            tmpReq.setPrepId(row[fields["prepid"]])
+
+        if "sequences customize" in fields:
+            tmpReq.setSequencesCustomise(row[fields["sequences customize"]])
+
+        if "process string" in fields:
+            tmpReq.setProcessString(row[fields["process string"]])
+        if "gridpack" in fields:
+            this_gridpack = row[fields["gridpack"]]
+            if "gridpack cards url" in fields:
+                this_gridpack_cards_url = row[fields["gridpack cards url"]]
             else:
-                tmpReq.setMcMFrag(createLHEProducer(row[fields[18]], "", "", ""))
-        if fields[20] > -1:
+                this_gridpack_cards_url = ""
+            if "fragment" in fields:
+                this_fragment = row[fields["fragment"]]
+            else:
+                this_fragment = ""
+            if "tag" in fields:
+                this_tag = row[fields["tag"]]
+            else:
+                this_tag = ""
+            tmpReq.setMcMFrag(createLHEProducer(this_gridpack, this_gridpack_cards_url, this_fragment, this_tag))
+        if "notes" in fields:
             tmpReq.setNotes(row[fields[20]])
-        if fields[21] > -1:
+
+        if "mcm tag" in fields:
             tmpReq.setMcMTag(row[fields[21]].split(" "))
         elif McMTags is not None:
             tmpReq.setMcMTag(McMTags)
-        if fields[22] > -1:
+
+        if "sequences beamspot" in fields:
             tmpReq.setSequencesBeamspot(row[fields[22]])
-        if fields[23] > -1:
+        if "sequences magfield" in fields:
             tmpReq.setSequencesMagField(row[fields[23]])
         requests.append(tmpReq)
     return requests, num_requests
@@ -432,6 +387,10 @@ def createRequests(requests, num_requests, doDryRun, useDev):
             #print "DEBUG 2 -----------------------> ", answer
             #print "DEBUG 3 -----------------------> ", answer['results']
             #print "DEBUG 4 -----------------------> ", answer['prepid']
+            if not "results" in answer:
+                print "Something is wrong! Here is the response from MCM:"
+                print answer
+                sys.exit(1)
             if answer['results']:
                 # Cannot fill generator parameters while creating a new request
                 # Modify newly created request with generator parameters
@@ -587,7 +546,12 @@ def modifyRequests(requests, num_requests, doDryRun, useDev, isLHErequest):
             mod_req['notes'] = reqFields.getNotes()
         if reqFields.useMcMTag():
             mod_req['tags'] += reqFields.getMcMTag()
-        
+
+        # Don't update if the local test job failed
+        if mod_req['time_event'] == 0 or mod_req['size_event'] == 0:
+            print "ERROR : For prepid {}, time_event={}, size_event={}. Skipping this request.".format(reqFields.getPrepId(), mod_req['time_event'], mod_req['size_event'])
+            return
+            
         #Avoiding to have unset generator parameters
         if mod_req['generator_parameters'][0]['cross_section'] < 0: mod_req['generator_parameters'][0]['cross_section'] = 1.0
         if mod_req['generator_parameters'][0]['filter_efficiency'] < 0: mod_req['generator_parameters'][0]['filter_efficiency'] = 1.0
