@@ -87,7 +87,7 @@ def exitDuplicateField(file_in_, field_):
         file_in_, field_)
     sys.exit(3)
 
-def getFields(csvfile_, file_in_):
+def getFields(csvfile_):
     field_indices = {}
     field_candidates = ['name', 'dataset', 'mcdbid', 'cross section', 'events', 'fragment', 'time per event', 'size per event', 'tag', 'generator', 'campaign', 'sequences customize', 'gridpack', 'gridpack cards url', 'mcm tag', 'filter efficiency', "filter efficiency err", "match efficiency", "match efficiency err", "pwg", 'campaign', 'prepid', 'sequences customize', 'process string', 'notes', 'sequences beamspot', 'sequences magfield', 'jobid']
 
@@ -680,7 +680,7 @@ def main():
         print "Using dev/test instance."
 
     csvfile = open(args.file_in, 'r') # Open CSV file
-    fields = getFields(csvfile, args.file_in) # Get list of field indices
+    fields = getFields(csvfile) # Get list of field indices
     # Fill list of request objects with fields from CSV and get number of requests
     requests, num_requests = fillFields(csvfile, fields, args.campaign,
                                         args.pwg, notCreate, args.McMTags)
