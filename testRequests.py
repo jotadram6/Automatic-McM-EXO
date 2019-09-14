@@ -21,6 +21,7 @@ import csv
 import re
 import glob
 import time
+import math
 sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
 from rest import * # Load class to access McM
 from requestClass import * # Load class to store request information
@@ -29,7 +30,7 @@ from requestClass import * # Load class to store request information
 re_filtereff = re.compile("Filter efficiency.*=.*= (?P<n1>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) \+- (?P<n2>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?).*\[TO BE USED IN MCM\]")
 re_matcheff = re.compile("Matching efficiency = (?P<n1>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) \+/- (?P<n2>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?).*\[TO BE USED IN MCM\]")
 re_totalevents = re.compile("<TotalEvents>(\d*)</TotalEvents>")
-re_totalevents2 = re.compile('(\d*) events were ran')
+re_eventsran = re.compile('(\d*) events were ran')
 re_totalsize = re.compile('<Metric Name="Timing-tstoragefile-write-totalMegabytes" Value="(\d*\.\d*)"/>')
 re_totalsize2 = re.compile("total (\d*)K")
 re_jobTime = re.compile('<Metric Name="(?:TotalJobCPU|TotalJobTime)" Value="(\d*\.\d*)"/>')
@@ -422,18 +423,23 @@ def fillFields(csvfile, fields):
         requests.append(tmpReq)
     return requests, num_requests
 
-def rewriteCSVFile(csvfile, requests):
+def writeResultsCSV(csvfile, requests):
     csvWriter = csv.writer(csvfile)
     csvWriter.writerow(['PrepId', 'JobId', 'Time per event [s]',
                         'Size per event [kB]', 'match efficiency'])
 
     for req in requests:
+        if req.getTime() < 0:
+            continue
         timePerEvent = ""
-        if req.useTime(): timePerEvent = req.getTime()
+        if req.useTime(): 
+            timePerEvent = req.getTime()
         sizePerEvent = ""
-        if req.useSize(): sizePerEvent = req.getSize()
+        if req.useSize(): 
+            sizePerEvent = req.getSize()
         matchEff = ""
-        if req.useMatchEff(): matchEff = req.getMatchEff()
+        if req.useMatchEff(): 
+            matchEff = req.getMatchEff()
 
         csvWriter.writerow([req.getPrepId(), req.getJobID(), timePerEvent,
                             sizePerEvent, matchEff])
@@ -443,7 +449,9 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
     totalSize = 0
     jobTimeCandidates = []
     avgEventTimeCandidates = []
-    nEventsCandidates = []
+    #nEventsCandidates = []
+    totalEvents = -1
+    eventsRan = -1
     XsBeforeMatch = 0
     XsAfterMatch = 0
     matchEff = 1.0
@@ -455,16 +463,17 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
     if stderrFile:
         filesToParse.append(stderrFile)
     for fileToParse in filesToParse:
+        print "Reading {}".format(fileToParse)
         fileContents = open(fileToParse, 'r')
         for line in fileContents:
             match_totalevents = re_totalevents.search(line)
             if match_totalevents is not None:
-                nEventsCandidates.append(float(match_totalevents.group(1)))
+                totalEvents = float(match_totalevents.group(1))
                 continue
 
-            match_totalevents2 = re_totalevents2.search(line)
-            if match_totalevents2 is not None:
-                nEventsCandidates.append(float(match_totalevents2.group(1)))
+            match_eventsran = re_eventsran.search(line)
+            if match_eventsran is not None:
+                eventsRan = float(match_eventsran.group(1))
                 continue
 
             match_totalsize = re_totalsize.search(line)
@@ -500,20 +509,28 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
             if match_avgEventTime is not None:
                 avgEventTimeCandidates.append(float(match_avgEventTime.group(1)))
 
-    if len(nEventsCandidates) == 0:
-        raise ValueError("Didn't find number of events from log files!")
-    # If more than one nEvents field is found, use the maximum. Sometimes, the number of filtered events gets picked up here.
-    nEvents = max([int(x) for x in nEventsCandidates])
+    # Fix for randomized parameters requests: matching efficiency is not computed, because requests are GS not wmLHEGS!
+    if totalEvents == -1:
+        raise ValueError("Didn't find total number of events from log file! I.e. <TotalEvents>###</TotalEvents>")
+
+    totalEff = totalEvents / eventsRan
+    totalEffErr = math.sqrt(totalEff * (1. - totalEff) / eventsRan)
+    if abs(totalEff - (matchEff * filterEff)) > 0.05:
+        print "WARNING : Total efficiency {} doesn't match matchEff*filterEff = {}*{} = {}.".format(totalEff, matchEff, filterEff, matchEff * filterEff)
+        if matchEff == 1.:
+            print "WARNING : I'm guessing this is randomized parameters, and matchEff just isn't in the log file. Setting matchEff = totalEff / filterEff"
+            matchEff = totalEff / filterEff
+            matchEffErr = matchEff * math.sqrt((totalEffErr / totalEff)**2 + (filterEffErr / filterEff)**2)
 
     # Size / event calculation
-    if nEvents != 0:
-        sizePerEvent = totalSize * 1024.0 / nEvents
+    if totalEvents != 0:
+        sizePerEvent = totalSize * 1024.0 / totalEvents
     else:
         sizePerEvent = -1
 
     timePerEventCandidates = []
     for jobTime in jobTimeCandidates:
-        timePerEventCandidates.append(jobTime / nEvents)
+        timePerEventCandidates.append(jobTime / totalEvents)
     for avgEventTime in avgEventTimeCandidates:
         timePerEventCandidates.append(avgEventTime)
     timePerEvent = max(timePerEventCandidates)
@@ -529,6 +546,8 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
 
 def getTimeSize(requests, use_bsub=False, force_update=False):
     number_complete = 0
+    successful_jobs = []
+    failed_jobs = []
     for req in requests:
         if not req.useTime() or not req.useSize() or force_update:
             if use_bsub:
@@ -557,10 +576,25 @@ def getTimeSize(requests, use_bsub=False, force_update=False):
                 searched = re.search('wmLHE', req.getPrepId())
                 if searched is not None:
                     iswmLHE = True
-                timePerEvent, sizePerEvent, matchEff, matchEffErr, filterEff, filterEffErr = getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=use_bsub, stderrFile=stderrFile)
+                try:
+                    timePerEvent, sizePerEvent, matchEff, matchEffErr, filterEff, filterEffErr = getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=use_bsub, stderrFile=stderrFile)
+                except ValueError as error:
+                    print error
+                    timePerEvent = -1
+                    sizePerEvent = -1
+                    matchEff = -1
+                    matchEffErr = 0
+                    filterEff = -1
+                    filterEffErr = 0
 
                 if timePerEvent == 0:
                     print "[getTimeSize] WARNING : timePerEvent=0 for request {}. Try resubmitting.".format(req.getPrepId())
+                    failed_jobs.append(req.getPrepId())
+                elif timePerEvent < 0:
+                    print "[getTimeSize] WARNING : timePerEvent not found for request {}. Try resubmitting.".format(req.getPrepId())
+                    failed_jobs.append(req.getPrepId())
+                else:
+                    successful_jobs.append(req.getPrepId())
 
                 req.setTime(timePerEvent)
                 req.setSize(sizePerEvent)
@@ -577,7 +611,7 @@ def getTimeSize(requests, use_bsub=False, force_update=False):
     else:
         print "Extracted info for {0} of {1} requests. {2} requests remain.".format(
             number_complete, len(requests), len(requests) - number_complete)
-    return
+    return successful_jobs, failed_jobs
 
 def extractTest(test_dir, force_update=False, use_bsub=False):
     cwd = os.getcwd()
@@ -587,12 +621,19 @@ def extractTest(test_dir, force_update=False, use_bsub=False):
     # Fill list of request objects from CSV file and get number of requests
     requests, num_requests = fillFields(inputCsvFile, fields)
     inputCsvFile.close()
-    getTimeSize(requests, force_update=force_update, use_bsub=use_bsub)
+    successful_jobs, failed_jobs = getTimeSize(requests, force_update=force_update, use_bsub=use_bsub)
 
     outputCsvFile = open("testresults.csv", 'w')
-    rewriteCSVFile(outputCsvFile, requests)
+    writeResultsCSV(outputCsvFile, requests)
 
     os.chdir(cwd)
+
+    if len(failed_jobs) >= 1:
+        print "WARNING: some jobs failed! You should either resubmit, or guess the parameters from the successful jobs."
+        print "Successful jobs:"
+        print successful_jobs
+        print "Failed jobs:"
+        print failed_jobs
     return
 
 def main():
