@@ -45,12 +45,16 @@ class GridpackRequest(Request):
 		return self._gridpack_path
 
 class RandomizedParameterRequest():
-	def __init__(self, dataset_name, campaign):
+	def __init__(self, dataset_name, campaign, output_dir=".", use_gridpack=False, overwrite=False):
+		self._superfragment_path = "{}/{}.py".format(output_dir, dataset_name)
+		if os.path.isfile(self._superfragment_path):
+			if overwrite:
+				print "[RandomizedParameterRequest::__init__] WARNING : Overwriting old fragment at {}".format(self._superfragment_path)
+			else:
+				raise ValueError("Output fragment {} already exists. Please move it out of the way first.".format(self._superfragment_path))
+
 		self._dataset_name = dataset_name
-		if "wmLHEGS" in campaign:
-			self._type = "gridpack"
-		else:
-			self._type = "pythia"
+		self._type = "gridpack" if use_gridpack else "pythia"
 		self._requests = []
 
 	def type(self):
@@ -59,6 +63,9 @@ class RandomizedParameterRequest():
 	def requests(self):
 		return self._requests
 
+	def total_nevents(self):
+		return sum([x.nevents() for x in self._requests])
+
 	def add_request(self, *args, **kwargs):
 		if self._type == "pythia":
 			self._requests.append(Request(*args, **kwargs))
@@ -66,7 +73,7 @@ class RandomizedParameterRequest():
 			self._requests.append(GridpackRequest(*args, **kwargs))
 
 
-	def finalize(self, output_directory):
+	def finalize(self):
 		# Calculate weights
 		total_events = sum([request._nevents for request in self._requests])
 
@@ -84,7 +91,8 @@ class RandomizedParameterRequest():
 			if not frag_dir in sys.path:
 				sys.path.insert(0, frag_dir)
 			module = __import__(frag_name[:-3])
-			grid_point_list[-1]['fragment'] = format_fragment(module.generator.PythiaParameters.dumpPython())
+			grid_point_list[-1]['processParameters'] = [x for x in module.generator.PythiaParameters.processParameters]
+			#grid_point_list[-1]['fragment'] = format_fragment(module.generator.PythiaParameters.dumpPython())
 
 			if self._type == "gridpack":
 				grid_point_list[-1]['gridpack_path'] = request.gridpack_path()
@@ -111,29 +119,28 @@ class RandomizedParameterRequest():
 					this_sblock = match_sblock.group("sblock").rstrip()
 					sblocks.append(this_sblock)
 					sblock_strings.append("\"{}\"".format(this_sblock.replace("Block", "")))
-		print "Including the following imports:"
-		for importt in imports:
-			print "\t" + importt
-		print "Including the following settings blocks:"
-		for sblock in sblocks:
-			print "\t" + sblock
+		#print "Including the following imports:"
+		#for importt in imports:
+		#	print "\t" + importt
+		#print "Including the following settings blocks:"
+		#for sblock in sblocks:
+		#	print "\t" + sblock
 		if not pdf_block:
 			raise ValueError("Didn't find PDF string in file {}".format(self._requests[0].fragment_path()))
 
 		if self._type == "gridpack":
-			gridpack_string = "\n			GridpackPath = grid_points['gridpack_path'],\n"
+			gridpack_string = "\n		GridpackPath = cms.string(grid_point['gridpack_path']),\n"
 		else:
 			gridpack_string = "\n"
 
-		print "[debug] sblocks:"
-		print "\n\t".join(sblocks)
-		print "[debug] sblock strings:"
-		print "\n\t\t".join(sblock_strings)
-		print "[debug] gridpack_string:"
-		print gridpack_string
+		#print "[debug] sblocks:"
+		#print "\n\t".join(sblocks)
+		#print "[debug] sblock strings:"
+		#print "\n\t\t".join(sblock_strings)
+		#print "[debug] gridpack_string:"
+		#print gridpack_string
 
-		os.system("mkdir -pv {}".format(output_directory))
-		with open("{}/superfragment_cfi.py".format(output_directory), 'w') as superfragment:
+		with open(self._superfragment_path, 'w') as superfragment:
 			superfragment.write("""import FWCore.ParameterSet.Config as cms
 
 {imports}
@@ -151,10 +158,10 @@ grid_points = {points}
 
 for grid_point in grid_points:
 	basePythiaParameters = cms.PSet(
-		{settings_blocks}
+		{settings_blocks},
 		processParameters = cms.vstring(grid_point['processParameters']),
 		parameterSets = cms.vstring(
-			{settings_strings}
+			{settings_strings},
 			'processParameters',
 		),
 	)
@@ -171,8 +178,8 @@ ProductionFilterSequence = cms.Sequence(generator)
 """.format(
 	points=json.dumps(grid_point_list), 
 	imports="\n".join(imports), 
-	settings_blocks="\n\t\t".join(sblocks), 
-	settings_strings="\n\t\t\t".join(sblock_strings), 
+	settings_blocks=",\n\t\t".join(sblocks), 
+	settings_strings=",\n\t\t\t".join(sblock_strings), 
 	gridpack_string=gridpack_string))
 
 if __name__ == "__main__":
