@@ -196,6 +196,9 @@ externalLHEProducer = cms.EDProducer("ExternalLHEProducer",
         #gen_fragment = urllib2.urlopen(gen_fragment_url).read()
         gen_fragment = fetchFragment(fragment)
 
+        if "ExternalLHEProducer" in gen_fragment:
+            raise ValueError("The analyzer fragment already has an ExternalLHEProducer. Please remove it before proceeding. Otherwise, the fragment will have two ExternalLHEProducers.")
+
         code += """
 {0}
 
@@ -255,7 +258,7 @@ def fillFields(csvfile, fields, campaign, PWG, notCreate_, McMTags):
             if fragment:
                 tmpReq.setMcMFrag(fragment)
             else:
-                print "[fillFields] WARNING : Failed to get fragment " + row[fields[4]] + "!"
+                print "[fillFields] WARNING : Failed to get fragment " + row[fields["fragment"]] + "!"
                 sys.exit(1)
             #tmpReq.setMcMFrag(createLHEProducer(row[fields[18]], "", row[fields[4]], "1"))
             #tmpReq.setFrag(formatFragment(row[fields[4]],campaign))
@@ -380,7 +383,8 @@ def createRequests(requests, num_requests, doDryRun, useDev):
             new_req['notes'] = reqFields.getNotes()
         if reqFields.useMcMTag():
             new_req['tags'] = reqFields.getMcMTag()
-
+        #print new_req
+        
         if not doDryRun:
             #print "DEBUG 1 -----------------------> ", "Dictionary prepared:", new_req
             answer = mcm.put('requests', new_req) # Create request
