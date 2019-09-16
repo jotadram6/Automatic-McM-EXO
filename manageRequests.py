@@ -87,7 +87,7 @@ def exitDuplicateField(file_in_, field_):
         file_in_, field_)
     sys.exit(3)
 
-def getFields(csvfile_, file_in_):
+def getFields(csvfile_):
     field_indices = {}
     field_candidates = ['name', 'dataset', 'mcdbid', 'cross section', 'events', 'fragment', 'time per event', 'size per event', 'tag', 'generator', 'campaign', 'sequences customize', 'gridpack', 'gridpack cards url', 'mcm tag', 'filter efficiency', "filter efficiency err", "match efficiency", "match efficiency err", "pwg", 'campaign', 'prepid', 'sequences customize', 'process string', 'notes', 'sequences beamspot', 'sequences magfield', 'jobid']
 
@@ -196,6 +196,9 @@ externalLHEProducer = cms.EDProducer("ExternalLHEProducer",
         #gen_fragment = urllib2.urlopen(gen_fragment_url).read()
         gen_fragment = fetchFragment(fragment)
 
+        if "ExternalLHEProducer" in gen_fragment:
+            raise ValueError("The analyzer fragment already has an ExternalLHEProducer. Please remove it before proceeding. Otherwise, the fragment will have two ExternalLHEProducers.")
+
         code += """
 {0}
 
@@ -255,7 +258,7 @@ def fillFields(csvfile, fields, campaign, PWG, notCreate_, McMTags):
             if fragment:
                 tmpReq.setMcMFrag(fragment)
             else:
-                print "[fillFields] WARNING : Failed to get fragment " + row[fields[4]] + "!"
+                print "[fillFields] WARNING : Failed to get fragment " + row[fields["fragment"]] + "!"
                 sys.exit(1)
             #tmpReq.setMcMFrag(createLHEProducer(row[fields[18]], "", row[fields[4]], "1"))
             #tmpReq.setFrag(formatFragment(row[fields[4]],campaign))
@@ -380,7 +383,8 @@ def createRequests(requests, num_requests, doDryRun, useDev):
             new_req['notes'] = reqFields.getNotes()
         if reqFields.useMcMTag():
             new_req['tags'] = reqFields.getMcMTag()
-
+        #print new_req
+        
         if not doDryRun:
             #print "DEBUG 1 -----------------------> ", "Dictionary prepared:", new_req
             answer = mcm.put('requests', new_req) # Create request
@@ -680,7 +684,7 @@ def main():
         print "Using dev/test instance."
 
     csvfile = open(args.file_in, 'r') # Open CSV file
-    fields = getFields(csvfile, args.file_in) # Get list of field indices
+    fields = getFields(csvfile) # Get list of field indices
     # Fill list of request objects with fields from CSV and get number of requests
     requests, num_requests = fillFields(csvfile, fields, args.campaign,
                                         args.pwg, notCreate, args.McMTags)
