@@ -47,7 +47,6 @@ def getArguments():
     parser.add_argument('-n', dest='nEvents', help='Number of events to test.')
     parser.add_argument('-d', '--dev', action='store_true', help='Use dev instance of MCM')
     parser.add_argument('-D', '--test_dir', type=str, default='test', help='Test directory')
-    parser.add_argument('--resubmit', action='store_true', help='Resubmit failed jobs')
 
     args_ = parser.parse_args()
     return args_
@@ -233,28 +232,6 @@ def createTest(compactPrepIDList, nEvents, use_bsub=False, use_dev=False, test_d
 
     os.chdir(cwd)
     return
-
-def resbumitTest(test_dir, use_bsub=False, use_dev=False):
-    if not os.path.isdir(test_dir):
-        raise ValueError("Test directory {} doesn't exist.".format(test_dir))
-
-    cwd = os.getcwd()
-    os.chdir(test_dir)
-
-    csvfile_in  =csv.reader(open("testjobs.csv","r"))
-    csvfile_out =csv.writer(open("testjobs_resubmit.csv","w+"))
-
-    header = csvfile_in.next()
-    PrepID_ind = header.index("PrepId")
-    JobID_ind = header.index("JobId")
-    for row in csvfile_in:
-        if row[0].startwith("#"):
-            continue
-        if  "PrepId" in row:
-            csvfile_out.writerow(row)
-        if "EXO-Run" in row[PrepID_ind]:
-            JobID = row[JobID_ind]
-            PrepID = row[PrepID_ind]
 
 def exitDuplicateField(file_in_,field_):
     print "Error: File {0} contains multiple instances of the field {1}".format(
