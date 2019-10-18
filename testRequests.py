@@ -646,8 +646,6 @@ def main():
         sys.exit(1)
     elif args.ids:
         createTest(args.ids, args.nEvents, use_bsub=args.bsub, use_dev=args.dev, test_dir=args.test_dir)
-    elif args.resubmit:
-        resubmitTest(args.test_dir, use_bsub=args.bsub, use_dev=args.dev)
     elif args.extract:
         extractTest(args.test_dir, use_bsub=args.bsub)
     else:
