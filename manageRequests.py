@@ -515,7 +515,8 @@ def modifyRequests(requests, num_requests, doDryRun, useDev, isLHErequest):
             mod_req['generators'] = reqFields.getGen()
         if (reqFields.useCS() or reqFields.useFiltEff()
             or reqFields.useFiltEffErr() or reqFields.useMatchEff()
-            or reqFields.useMatchEffErr()) and mod_req['generator_parameters'] == []:
+            or reqFields.useMatchEffErr()):# and mod_req['generator_parameters'] == []:
+            print "Resetting generator_parameters"
             mod_req['generator_parameters'] = [{'match_efficiency_error': 0.0,
                                                 'match_efficiency': 1.0,
                                                 'filter_efficiency': 1.0,
