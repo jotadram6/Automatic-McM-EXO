@@ -27,8 +27,10 @@ from rest import * # Load class to access McM
 from requestClass import * # Load class to store request information
 
 # Regexes
-re_filtereff = re.compile("Filter efficiency.*=.*= (?P<n1>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) \+- (?P<n2>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?).*\[TO BE USED IN MCM\]")
+re_filtereff = re.compile("Filter efficiency.*=.*= (?P<n1>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) \+- (?P<n2>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)")
 re_matcheff = re.compile("Matching efficiency = (?P<n1>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) \+/- (?P<n2>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?).*\[TO BE USED IN MCM\]")
+re_matcheff_backup_den = re.compile("Before matching: total cross section = (?P<n1>\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) \+- (?P<n2>\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) pb")
+re_matcheff_backup_num = re.compile("After matching: total cross section = (?P<n1>\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) \+- (?P<n2>\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) pb")
 re_totalevents = re.compile("<TotalEvents>(\d*)</TotalEvents>")
 re_eventsran = re.compile('(\d*) events were ran')
 re_totalsize = re.compile('<Metric Name="Timing-tstoragefile-write-totalMegabytes" Value="(\d*\.\d*)"/>')
@@ -47,6 +49,7 @@ def getArguments():
     parser.add_argument('-n', dest='nEvents', help='Number of events to test.')
     parser.add_argument('-d', '--dev', action='store_true', help='Use dev instance of MCM')
     parser.add_argument('-D', '--test_dir', type=str, default='test', help='Test directory')
+    parser.add_argument('-r', '--randomized_parameters', action="store_true", help="Use for randomized parameters requests")
 
     args_ = parser.parse_args()
     return args_
@@ -426,7 +429,7 @@ def fillFields(csvfile, fields):
 def writeResultsCSV(csvfile, requests):
     csvWriter = csv.writer(csvfile)
     csvWriter.writerow(['PrepId', 'JobId', 'Time per event [s]',
-                        'Size per event [kB]', 'match efficiency'])
+                        'Size per event [kB]', 'match efficiency', 'filter efficiency'])
 
     for req in requests:
         if req.getTime() < 0:
@@ -440,12 +443,15 @@ def writeResultsCSV(csvfile, requests):
         matchEff = ""
         if req.useMatchEff(): 
             matchEff = req.getMatchEff()
+        filterEff = ""
+        if req.useFiltEff(): 
+            filterEff = req.getFiltEff()
 
         csvWriter.writerow([req.getPrepId(), req.getJobID(), timePerEvent,
-                            sizePerEvent, matchEff])
+                            sizePerEvent, matchEff, filterEff])
     return
 
-def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
+def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None, is_rp=False):
     totalSize = 0
     jobTimeCandidates = []
     avgEventTimeCandidates = []
@@ -456,6 +462,10 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
     XsAfterMatch = 0
     matchEff = 1.0
     matchEffErr = 0.0
+    matchEffBackupNum = 1.0
+    matchEffBackupNumErr = 0.0
+    matchEffBackupDen = 1.0
+    matchEffBackupDenErr = 0.0
     filterEff = 1.0
     filterEffErr = 0.0
 
@@ -468,7 +478,11 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
         for line in fileContents:
             match_totalevents = re_totalevents.search(line)
             if match_totalevents is not None:
-                totalEvents = float(match_totalevents.group(1))
+                if totalEvents >= 0:
+                    print "WARNING : Found another total events ({}), but I already found total events = {}! Taking the minimum, since sometimes the pre-filter number shows up.".format(match_totalevents.group(1), totalEvents)
+                    totalEvents = min(totalEvents, float(match_totalevents.group(1)))
+                else:
+                    totalEvents = float(match_totalevents.group(1))
                 continue
 
             match_eventsran = re_eventsran.search(line)
@@ -494,6 +508,18 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
                     raise ValueError("Found matching efficiency of {} for a GS job, which is not supposed to have matching! Something is wrong.")
                 continue
 
+            match_matcheff_backup_num = re_matcheff_backup_num.search(line)
+            if match_matcheff_backup_num is not None:
+                matchEffBackupNum = float(match_matcheff_backup_num.group("n1"))
+                matchEffBackupNumErr = float(match_matcheff_backup_num.group("n2"))
+                continue
+
+            match_matcheff_backup_den = re_matcheff_backup_den.search(line)
+            if match_matcheff_backup_den is not None:
+                matchEffBackupDen = float(match_matcheff_backup_den.group("n1"))
+                matchEffBackupDenErr = float(match_matcheff_backup_den.group("n2"))
+                continue
+
             match_filtereff = re_filtereff.search(line)
             if match_filtereff is not None:
                 filterEff = float(match_filtereff.group("n1"))
@@ -509,6 +535,12 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
             if match_avgEventTime is not None:
                 avgEventTimeCandidates.append(float(match_avgEventTime.group(1)))
 
+    # Robustness for matching efficiency: sometimes the regex is not present!
+    if matchEff == 1.0 and matchEffBackupNum < matchEffBackupDen:
+        print "WARNING : Direct search for matchEff returned 1.0, but indirect search for num/den succeeded. Using the indirect results."
+        matchEff = matchEffBackupNum / matchEffBackupDen
+        matchEffErr = matchEff * math.sqrt((matchEffBackupNumErr / matchEffBackupNum)**2 + (matchEffBackupDenErr / matchEffBackupDen)**2)
+
     # Fix for randomized parameters requests: matching efficiency is not computed, because requests are GS not wmLHEGS!
     if totalEvents == -1:
         raise ValueError("Didn't find total number of events from log file! I.e. <TotalEvents>###</TotalEvents>")
@@ -517,10 +549,13 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
     totalEffErr = math.sqrt(totalEff * (1. - totalEff) / eventsRan)
     if abs(totalEff - (matchEff * filterEff)) > 0.05:
         print "WARNING : Total efficiency {} doesn't match matchEff*filterEff = {}*{} = {}.".format(totalEff, matchEff, filterEff, matchEff * filterEff)
-        if matchEff == 1.:
-            print "WARNING : I'm guessing this is randomized parameters, and matchEff just isn't in the log file. Setting matchEff = totalEff / filterEff"
+        if is_rp:
+            print "WARNING : I'm told this is randomized parameters, and matchEff just isn't in the log file. Setting matchEff = totalEff / filterEff"
             matchEff = totalEff / filterEff
             matchEffErr = matchEff * math.sqrt((totalEffErr / totalEff)**2 + (filterEffErr / filterEff)**2)
+        else:
+            print "ERROR : I'm giving up. If this is a randomized parameters request, specify -r and re-run."
+            sys.exit(1)
 
     # Size / event calculation
     if totalEvents != 0:
@@ -544,7 +579,7 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
         print "WARNING: Filter efficiency error {:.3f} > 10%! Consider running more events.".format(filterEffErr / filterEff)
     return timePerEvent, sizePerEvent, matchEff, matchEffErr, filterEff, filterEffErr
 
-def getTimeSize(requests, use_bsub=False, force_update=False):
+def getTimeSize(requests, use_bsub=False, force_update=False, is_rp=False):
     number_complete = 0
     successful_jobs = []
     failed_jobs = []
@@ -577,7 +612,7 @@ def getTimeSize(requests, use_bsub=False, force_update=False):
                 if searched is not None:
                     iswmLHE = True
                 try:
-                    timePerEvent, sizePerEvent, matchEff, matchEffErr, filterEff, filterEffErr = getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=use_bsub, stderrFile=stderrFile)
+                    timePerEvent, sizePerEvent, matchEff, matchEffErr, filterEff, filterEffErr = getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=use_bsub, stderrFile=stderrFile, is_rp=is_rp)
                 except ValueError as error:
                     print error
                     timePerEvent = -1
@@ -613,7 +648,7 @@ def getTimeSize(requests, use_bsub=False, force_update=False):
             number_complete, len(requests), len(requests) - number_complete)
     return successful_jobs, failed_jobs
 
-def extractTest(test_dir, force_update=False, use_bsub=False):
+def extractTest(test_dir, force_update=False, use_bsub=False, is_rp=False):
     cwd = os.getcwd()
     os.chdir(test_dir)
     inputCsvFile = open("testjobs.csv", 'r') # Open CSV file
@@ -621,7 +656,7 @@ def extractTest(test_dir, force_update=False, use_bsub=False):
     # Fill list of request objects from CSV file and get number of requests
     requests, num_requests = fillFields(inputCsvFile, fields)
     inputCsvFile.close()
-    successful_jobs, failed_jobs = getTimeSize(requests, force_update=force_update, use_bsub=use_bsub)
+    successful_jobs, failed_jobs = getTimeSize(requests, force_update=force_update, use_bsub=use_bsub, is_rp=is_rp)
 
     outputCsvFile = open("testresults.csv", 'w')
     writeResultsCSV(outputCsvFile, requests)
@@ -644,7 +679,7 @@ def main():
     elif args.ids:
         createTest(args.ids, args.nEvents, use_bsub=args.bsub, use_dev=args.dev, test_dir=args.test_dir)
     elif args.extract:
-        extractTest(args.test_dir, use_bsub=args.bsub)
+        extractTest(args.test_dir, use_bsub=args.bsub, is_rp=args.randomized_parameters)
     else:
         print "Error: Must use either -i or -f."
         sys.exit(2)
