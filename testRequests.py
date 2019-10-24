@@ -426,7 +426,7 @@ def fillFields(csvfile, fields):
 def writeResultsCSV(csvfile, requests):
     csvWriter = csv.writer(csvfile)
     csvWriter.writerow(['PrepId', 'JobId', 'Time per event [s]',
-                        'Size per event [kB]', 'match efficiency'])
+                        'Size per event [kB]', 'match efficiency', 'filter efficiency'])
 
     for req in requests:
         if req.getTime() < 0:
@@ -440,9 +440,12 @@ def writeResultsCSV(csvfile, requests):
         matchEff = ""
         if req.useMatchEff(): 
             matchEff = req.getMatchEff()
+        filterEff=""
+        if req.useFiltEff():
+            filterEff= req.getFiltEff()
 
         csvWriter.writerow([req.getPrepId(), req.getJobID(), timePerEvent,
-                            sizePerEvent, matchEff])
+                            sizePerEvent, matchEff, filterEff])
     return
 
 def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
