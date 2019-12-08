@@ -10,6 +10,7 @@ def format_fragment(fragment):
 		r"pythia8\1SettingsBlock",
 		fragment)
 
+# Individual request (one grid point)
 class Request():
 	__metaclass__ = abc.ABCMeta
 	def __init__(self, grid_point_name, fragment_path, nevents, generator_name):
@@ -32,7 +33,8 @@ class Request():
 	def generator_name(self):
 		return self._generator_name
 
-
+# Individual gridpack request (one grid point). 
+# Extends class Request, adding field for gridpack.
 class GridpackRequest(Request):
 	def __init__(self, grid_point_name, fragment_path, nevents, generator_name, gridpack_path):
 		super(GridpackRequest, self).__init__(grid_point_name, fragment_path, nevents, generator_name)
@@ -44,6 +46,7 @@ class GridpackRequest(Request):
 	def gridpack_path(self):
 		return self._gridpack_path
 
+# Randomized parameter request = whole signal grid. 
 class RandomizedParameterRequest():
 	def __init__(self, dataset_name, campaign, output_dir=".", use_gridpack=False, overwrite=False):
 		self._superfragment_path = "{}/{}.py".format(output_dir, dataset_name)
