@@ -232,13 +232,22 @@ def fillFields(csvfile, fields, campaign, PWG, notCreate_, McMTags):
             continue
         num_requests += 1
         tmpReq = Request()
+
+        # Set default values here, before parsing CSV file
+        tmpReq.setKeepOutput(False)
+
         if "dataset" in fields:
             tmpReq.setDataSetName(row[fields["dataset"]])
 
         if "mcdbid" in fields:
             tmpReq.setMCDBID(row[fields["mcdbid"]])
         elif not notCreate_:
-            tmpReq.setMCDBID(-1)
+            # For some reason, MCM always complains about Fall18wmLHEGS with negative MCDBID. 
+            # David thinks there's a bug somewhere, but this should fix the problem.
+            if campaign == "RunIIFall18wmLHEGS":
+                tmpReq.setMCDBID(0)
+            else:
+                tmpReq.setMCDBID(-1)
         if "cross section" in fields:
             tmpReq.setCS(row[fields["cross section"]])
         elif not notCreate_:
@@ -387,6 +396,7 @@ def createRequests(requests, num_requests, doDryRun, useDev):
         
         if not doDryRun:
             #print "DEBUG 1 -----------------------> ", "Dictionary prepared:", new_req
+            pprint.pprint(new_req)
             answer = mcm.put('requests', new_req) # Create request
             #print "DEBUG 2 -----------------------> ", answer
             #print "DEBUG 3 -----------------------> ", answer['results']

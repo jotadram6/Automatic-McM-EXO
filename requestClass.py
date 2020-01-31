@@ -35,6 +35,7 @@ class Request:
         self.useJobID_              = False
         self.useNotes_              = False
         self.useMcMTag_             = False
+        self.useKeepOutput_         = False
 
     def setDataSetName(self,x):
         self.DataSetName_ = x
@@ -108,6 +109,9 @@ class Request:
     def setMcMTag(self, x):
         self.McMTag_ = x
         self.useMcMTag_ = True
+    def setKeepOutput(self, x):
+        self.KeepOutput_ = x
+        self.useKeepOutput_ = True
 
     def getDataSetName(self):
         return self.DataSetName_
@@ -157,6 +161,9 @@ class Request:
         return self.Notes_
     def getMcMTag(self):
         return self.McMTag_
+    def getKeepOutput(self, x):
+        return self.KeepOutput_
+
 
     def useDataSetName(self):
         return self.useDataSetName_
@@ -206,3 +213,5 @@ class Request:
         return self.useNotes_
     def useMcMTag(self):
         return self.useMcMTag_
+    def useKeepOutput(self):
+        return self.useKeepOutput_
