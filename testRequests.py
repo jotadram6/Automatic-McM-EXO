@@ -171,7 +171,7 @@ def submitManyToCondor(reqs, retry=0):
 
     batch_command = "csub test_many.sh -t workday --queue_n {} -F {}".format(len(scripts), ",".join(scripts))
     # For RunII* jobs, use SLC6
-    if "RunII" in reqs[0].getPrepId():
+    if "RunIISummer15" in reqs[0].getPrepId() or "RunIIFall17" in reqs[0].getPrepId() or "RunIIFall18" in reqs[0].getPrepId():
         batch_command += " --os SLCern6"
     print batch_command
     output = subprocess.Popen(batch_command, stdout=subprocess.PIPE, shell=True).communicate()[0]
