@@ -83,7 +83,7 @@ if __name__ == "__main__":
   request = {
     "pwg":"EXO",
     "member_of_campaign":args.campaign,
-    "mcdb_id":0,
+#    "mcdb_id":0,
     "dataset_name":args.name,
     "total_events":rp_request.total_nevents(),
     "fragment":fragment_str,

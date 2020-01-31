@@ -168,7 +168,11 @@ def submitManyToCondor(reqs, retry=0):
         f.write("#!/bin/bash\n")
         f.write("scripts=(" + " ".join(scripts) + ")\n")
         f.write("source ${scripts[$1]}\n")
-    batch_command = "csub test_many.sh -t workday --os SLCern6 --queue_n {} -F {}".format(len(scripts), ",".join(scripts))
+
+    batch_command = "csub test_many.sh -t workday --queue_n {} -F {}".format(len(scripts), ",".join(scripts))
+    # For RunII* jobs, use SLC6
+    if "RunIISummer15" in reqs[0].getPrepId() or "RunIIFall17" in reqs[0].getPrepId() or "RunIIFall18" in reqs[0].getPrepId():
+        batch_command += " --os SLCern6"
     print batch_command
     output = subprocess.Popen(batch_command, stdout=subprocess.PIPE, shell=True).communicate()[0]
     print output
@@ -440,7 +444,7 @@ def writeResultsCSV(csvfile, requests):
         matchEff = ""
         if req.useMatchEff(): 
             matchEff = req.getMatchEff()
-        filterEff=""
+        filterEff="1.0"
         if req.useFiltEff():
             filterEff= req.getFiltEff()
 

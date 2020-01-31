@@ -27,7 +27,10 @@ if __name__ == "__main__":
 
     # Customize MCM request
     if args.tag:
-      request["tags"] = args.tag
+      if "tags" in request:
+        request["tags"].extend(args.tag.split(","))
+      else:
+        request["tags"] = args.tag.split(",")
 
     # Upload to MCM
     answer = mcm.put('requests', request)
