@@ -242,9 +242,9 @@ def fillFields(csvfile, fields, campaign, PWG, notCreate_, McMTags):
         if "mcdbid" in fields:
             tmpReq.setMCDBID(row[fields["mcdbid"]])
         elif not notCreate_:
-            # For some reason, MCM always complains about Fall18wmLHEGS with negative MCDBID. 
+            # For some reason, MCM complains about wmLHEGS with negative MCDBID. 
             # David thinks there's a bug somewhere, but this should fix the problem.
-            if campaign == "RunIIFall18wmLHEGS":
+            if campaign in ["RunIISummer15wmLHEGS", "RunIIFall17wmLHEGS", "RunIIFall18wmLHEGS"]:
                 tmpReq.setMCDBID(0)
             else:
                 tmpReq.setMCDBID(-1)
@@ -396,7 +396,7 @@ def createRequests(requests, num_requests, doDryRun, useDev):
         
         if not doDryRun:
             #print "DEBUG 1 -----------------------> ", "Dictionary prepared:", new_req
-            pprint.pprint(new_req)
+            #pprint.pprint(new_req)
             answer = mcm.put('requests', new_req) # Create request
             #print "DEBUG 2 -----------------------> ", answer
             #print "DEBUG 3 -----------------------> ", answer['results']
@@ -448,7 +448,7 @@ def createRequests(requests, num_requests, doDryRun, useDev):
                     reqFields.getDataSetName())
             else:
                 print "\033[0;31mrequest not created\033[0;m"
-            pprint.pprint(new_req)
+            #pprint.pprint(new_req)
 
 def modifyRequests(requests, num_requests, doDryRun, useDev, isLHErequest):
     # Modify existing request based on PrepId

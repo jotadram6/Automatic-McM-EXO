@@ -27,7 +27,8 @@ from rest import * # Load class to access McM
 from requestClass import * # Load class to store request information
 
 # Regexes
-re_filtereff = re.compile("Filter efficiency.*=.*= (?P<n1>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) \+- (?P<n2>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?).*\[TO BE USED IN MCM\]")
+re_filtereff = re.compile("Filter efficiency.*=.*= (?P<n1>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) \+- (?P<n2>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?).*")
+#re_filtereff = re.compile("Filter efficiency.*=.*= (?P<n1>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) \+- (?P<n2>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?).*\[TO BE USED IN MCM\]")
 re_matcheff = re.compile("Matching efficiency = (?P<n1>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?) \+/- (?P<n2>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?).*\[TO BE USED IN MCM\]")
 re_totalevents = re.compile("<TotalEvents>(\d*)</TotalEvents>")
 re_eventsran = re.compile('(\d*) events were ran')
@@ -427,12 +428,14 @@ def fillFields(csvfile, fields):
         requests.append(tmpReq)
     return requests, num_requests
 
-def writeResultsCSV(csvfile, requests):
+def writeResultsCSV(csvfile, requests, skip=[]):
     csvWriter = csv.writer(csvfile)
     csvWriter.writerow(['PrepId', 'JobId', 'Time per event [s]',
                         'Size per event [kB]', 'match efficiency', 'filter efficiency'])
 
     for req in requests:
+        if req.getPrepId() in skip:
+            continue
         if req.getTime() < 0:
             continue
         timePerEvent = ""
@@ -503,6 +506,8 @@ def getTimeSizeFromFile(stdoutFile, iswmLHE, use_bsub=False, stderrFile=None):
 
             match_filtereff = re_filtereff.search(line)
             if match_filtereff is not None:
+                print("Taking filter efficiency from:")
+                print(line)
                 filterEff = float(match_filtereff.group("n1"))
                 filterEffErr = float(match_filtereff.group("n2"))
                 continue
@@ -564,7 +569,9 @@ def getTimeSize(requests, use_bsub=False, force_update=False):
                 stdoutCandidates = glob.glob("{}/*{}*.stdout".format(os.getcwd(), req.getJobID()))
                 if len(stdoutCandidates) == 0:
                     print "[getTimeSize] WARNING : Didn't find output file for request {}".format(req.getJobID())
-                    sys.exit(1)
+                    failed_jobs.append(req.getPrepId())
+                    continue
+                    #sys.exit(1)
                 elif len(stdoutCandidates) >= 1:
                     # Multiple attempts: use latest
                     stdoutCandidates.sort(key=lambda x: os.path.getmtime(x), reverse=True)
@@ -597,11 +604,13 @@ def getTimeSize(requests, use_bsub=False, force_update=False):
                 if timePerEvent == 0:
                     print "[getTimeSize] WARNING : timePerEvent=0 for request {}. Try resubmitting.".format(req.getPrepId())
                     failed_jobs.append(req.getPrepId())
+                    continue
                 elif timePerEvent < 0:
                     print "[getTimeSize] WARNING : timePerEvent not found for request {}. Try resubmitting.".format(req.getPrepId())
                     failed_jobs.append(req.getPrepId())
+                    continue
                 else:
-                    successful_jobs.append(req.getPrepId())
+                    successful_jobs.append(req.getPrepId())                    
 
                 req.setTime(timePerEvent)
                 req.setSize(sizePerEvent)
@@ -631,7 +640,7 @@ def extractTest(test_dir, force_update=False, use_bsub=False):
     successful_jobs, failed_jobs = getTimeSize(requests, force_update=force_update, use_bsub=use_bsub)
 
     outputCsvFile = open("testresults.csv", 'w')
-    writeResultsCSV(outputCsvFile, requests)
+    writeResultsCSV(outputCsvFile, requests, skip=failed_jobs)
 
     os.chdir(cwd)
 
