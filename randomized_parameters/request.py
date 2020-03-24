@@ -93,8 +93,12 @@ class RandomizedParameterRequest():
 			frag_name = os.path.basename(request.fragment_path())
 			if not frag_dir in sys.path:
 				sys.path.insert(0, frag_dir)
+			print("DEBUG : Importing fragment {}".format(frag_name[:-3]))
 			module = __import__(frag_name[:-3])
-			grid_point_list[-1]['processParameters'] = [x for x in module.generator.PythiaParameters.processParameters]
+			useProcessParameters = False
+			if hasattr(module.generator.PythiaParameters, "processParameters"):
+				useProcessParameters = True
+				grid_point_list[-1]['processParameters'] = [x for x in module.generator.PythiaParameters.processParameters]
 			#grid_point_list[-1]['fragment'] = format_fragment(module.generator.PythiaParameters.dumpPython())
 
 			if self._type == "gridpack":
@@ -122,6 +126,9 @@ class RandomizedParameterRequest():
 					this_sblock = match_sblock.group("sblock").rstrip()
 					sblocks.append(this_sblock)
 					sblock_strings.append("\"{}\"".format(this_sblock.replace("Block", "")))
+		if useProcessParameters:
+			sblocks.append("processParameters = cms.vstring(grid_point['processParameters'])")
+			sblock_strings.append("'processParameters'")
 		#print "Including the following imports:"
 		#for importt in imports:
 		#	print "\t" + importt
