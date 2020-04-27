@@ -26,11 +26,11 @@ database_location = 'MC_Requests.db'
 html_location = ''
 
 mcm = McM(dev=False)
-mod_req = mcm.get(u'requests', u'EXO-PhaseIISummer17GenOnly-00006')
+mod_req = mcm.get(u'requests', u'EXO-RunIIWinter15pLHE-04044')
 
 print mod_req
 
-mod_req = mcm.get('requests', 'EXO-PhaseIISummer17wmLHEGENOnly-00015')
+#mod_req = mcm.get('requests', 'EXO-PhaseIISummer17wmLHEGENOnly-00015')
 
 #print mod_req
 

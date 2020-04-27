@@ -2,4 +2,9 @@ LSFJOB_*
 *.pyc
 *.*~
 *.tar.gz
+TEST/*
 TEST
+test_EXO-*
+EXO-*
+test_*
+*test_*

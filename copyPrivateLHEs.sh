@@ -121,6 +121,11 @@ while read -a line; do
 	echo -n "${line[i]}," >> $outputFile
     done
 
+    #echo ${ind}
+    #echo ${line[@]}
+    #file=${line[2]}
+    #echo "File:"
+    #echo ${file}
     file=${line[ind]}
     name=$(basename $file)
     if [ $rename == 1 ]; then

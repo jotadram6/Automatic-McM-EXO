@@ -382,7 +382,7 @@ def createRequests(requests, num_requests, doDryRun, useDev):
             new_req['tags'] = reqFields.getMcMTag()
 
         if not doDryRun:
-            #print "DEBUG 1 -----------------------> ", "Dictionary prepared:", new_req
+            print "DEBUG 1 -----------------------> ", "Dictionary prepared:", new_req
             answer = mcm.put('requests', new_req) # Create request
             #print "DEBUG 2 -----------------------> ", answer
             #print "DEBUG 3 -----------------------> ", answer['results']
